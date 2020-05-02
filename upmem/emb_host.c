@@ -79,6 +79,4 @@ int init_dpu(){
 }
 
 int main(){
-    init_dpu();
-    return 0;
 }
