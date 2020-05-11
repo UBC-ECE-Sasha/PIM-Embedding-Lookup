@@ -7,9 +7,9 @@
 
 // To build the code: dpu-upmem-dpurte-clang -o emb_dpu_lookup emb_dpu_lookup.c
 
-__mram_noinit uint8_t row_size_input;
-__mram_noinit uint8_t col_size_input;
-__mram_noinit uint8_t index_len_input;
+__mram_noinit uint32_t row_size_input;
+__mram_noinit uint32_t col_size_input;
+__mram_noinit uint32_t index_len_input;
 
 __mram_ptr __dma_aligned uint8_t *mram_offset;
 
@@ -24,7 +24,7 @@ int main() {
     mram_offset=DPU_MRAM_HEAP_POINTER;
     
     __dma_aligned uint32_t read_buf[MAX_SIZE], write_buf[MAX_SIZE];
-    __dma_aligned uint8_t write_len,read_len;
+    __dma_aligned uint32_t write_len,read_len;
 
     read_len=index_len*sizeof(uint32_t);
     mram_offset += nr_rows*nr_cols*sizeof(uint32_t);
