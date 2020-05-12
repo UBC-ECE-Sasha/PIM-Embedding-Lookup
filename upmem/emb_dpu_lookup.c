@@ -34,8 +34,8 @@ int main() {
 
     mram_read(mram_offset, read_buf, read_len);
 
-    for (int i=0;i<index_len;i++)
-        printf("%d\n",read_buf[i]);
+    /*for (int i=0;i<index_len;i++)
+        printf("%d\n",read_buf[i]);*/
 
     uint32_t __mram_ptr * emb=DPU_MRAM_HEAP_POINTER;
     

@@ -53,13 +53,13 @@ void lookup(uint8_t set_num, float *ans, uint32_t* input,uint32_t length, uint32
 
     DPU_FOREACH(set[set_num], dpu) {
         DPU_ASSERT(dpu_copy_from(dpu, DPU_MRAM_HEAP_POINTER_NAME, offset , (float*)ans, read_len));
-        DPU_ASSERT(dpu_log_read(dpu, stdout));
+        /*DPU_ASSERT(dpu_log_read(dpu, stdout));
         for (int i=0;i<length;i++){
             for (int j=0; j<nr_cols;j++)
 	            printf("ans[%d][%d] = %f\n",(uint32_t)input[i],j, ans[i*nr_cols+j]);
-	    }
+	    }*/
     }
-    DPU_ASSERT(dpu_free(set[set_num]));
+    //DPU_ASSERT(dpu_free(set[set_num]));
 }
 
 int main(){
