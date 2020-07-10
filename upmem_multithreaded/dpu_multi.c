@@ -1,1184 +1,948 @@
 // To build the code: dpu-upmem-dpurte-clang -DNR_TASKLETS=16 -o dpu_multi dpu_multi.c
 #include <mram.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <defs.h>
 #include <mutex.h>
-
-MUTEX_INIT(init_mutex);
-MUTEX_INIT(my_mutex);
+#include <stdbool.h> 
 
 __mram_noinit uint64_t row_size_input;
 __mram_noinit uint64_t col_size_input;
 __mram_noinit uint64_t index_len_input;
 
-bool init=false;
-bool e[16] = { [0 ... 15 ] = false };
+__dma_aligned uint64_t read_buf[256];
 
-// x+1, x+1, ..., x+1, x, x, ..., x
-// x+1 will be repeaterd a times
-// x will be repeaterd 16-a times
+int rows_per_tasklet;
+int num_with_one_more;
 
-int a, x; 
+// rows_per_tasklet+1, ..., rows_per_tasklet+1, rows_per_tasklet, ..., rows_per_tasklet
+// rows_per_tasklet+1 will be repeaterd num_with_one_more times
 
 uint64_t nr_rows, nr_cols, index_len;
-
-__dma_aligned uint64_t read_buf[256];
-__dma_aligned uint64_t write_buf[16][16];
-__dma_aligned uint64_t read_len, write_len;
-
-__mram_ptr __dma_aligned uint8_t *mram_offset_read;
-__mram_ptr __dma_aligned uint8_t *mram_offset_write;
+bool init=false;
 
 int main() {
 
-    mutex_lock(init_mutex);
-
-    printf("#%d\n", me());
-
-    if(!init){
-        nr_rows = row_size_input;
-        nr_cols = col_size_input;
-        index_len = index_len_input;
-
-        x = index_len/16;
-        a = index_len%16;
-
-        mram_offset_read = DPU_MRAM_HEAP_POINTER;
-
-        read_len = index_len*sizeof(uint64_t);
-
-        mram_offset_read += nr_rows*nr_cols*sizeof(uint64_t);
-
-        //updating the contents of read_buf with the index of the rows that we will lookup
-        mram_read(mram_offset_read, read_buf, read_len);
-
-        init=true;
-    }
-
-    mutex_unlock(init_mutex);
-
-    if(me()==0){
-
-        while(!init){}
-
-        int cur_index=0;
-
-        int i=0;
-
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
-
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
-
-
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-                
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
-            }
-        }
-
-        else{
-            for(int j=0; j<x; j++){
-
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
-            }
-        }
-
-        e[me()]=true;
+    switch(me()){
         
-    }
+        case 0:{
 
-    if(me()==1){
+            nr_rows = row_size_input;
+            nr_cols = col_size_input;
+            index_len = index_len_input;
 
-        while(!init){}
+            rows_per_tasklet = index_len/10;
+            num_with_one_more = index_len%10;
 
-        int cur_index=0;
+            __mram_ptr __dma_aligned uint8_t *mram_offset = DPU_MRAM_HEAP_POINTER;
 
-        int i=0;
+            mram_offset += nr_rows*nr_cols*sizeof(uint64_t);
 
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
+            //updating the contents of read_buf with the index of the rows that we will lookup
+            mram_read(mram_offset, read_buf, index_len*sizeof(uint64_t));
 
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
+            init=true;
 
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-                
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
             }
-        }
-
-        else{
-            for(int j=0; j<x; j++){
-
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
-            }
-        }
-
-        e[me()]=true;
         
-    }
 
-    if(me()==2){
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
-        while(!init){}
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-        int cur_index=0;
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+                    
+                    mram_read(mram_offset, write_buf, read_len);
 
-        int i=0;
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
+                    mram_write(write_buf, mram_offset, read_len);
 
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
+                    cur_index++;
+                }
+            }
 
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
 
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-                
-                /*mutex_lock(my_mutex);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+                    mram_read(mram_offset, write_buf, read_len);
 
-                mutex_unlock(my_mutex);*/
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+                    mram_write(write_buf, mram_offset, read_len);
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
+                    cur_index++;
+                }
             }
         }
+            break;
 
-        else{
-            for(int j=0; j<x; j++){
 
-                /*mutex_lock(my_mutex);
+        case 1:{
+    
+            while(!init){}
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+            __mram_ptr __dma_aligned uint8_t *mram_offset;
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-                mutex_unlock(my_mutex);*/
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
+            }
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-                read_len = nr_cols*sizeof(uint64_t);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                mram_read(mram_offset_read, write_buf[me()], read_len);
+                    mram_read(mram_offset, write_buf, read_len);
 
-                mram_write(write_buf[me()], mram_offset_write, read_len);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                cur_index++;
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
+            }
+
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+
+                    mram_read(mram_offset, write_buf, read_len);
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
             }
         }
+            break;
 
-        e[me()]=true;
-        
-    }
+        case 2:{
 
-    if(me()==3){
+            while(!init){}
 
-        while(!init){}
+            __mram_ptr __dma_aligned uint8_t *mram_offset;
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-        int cur_index=0;
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
+            }
 
-        int i=0;
-
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
-
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
 
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-                
-                /*mutex_lock(my_mutex);
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                mutex_unlock(my_mutex);*/
+                    mram_read(mram_offset, write_buf, read_len);
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+                    mram_write(write_buf, mram_offset, read_len);
 
-                read_len = nr_cols*sizeof(uint64_t);
+                    cur_index++;
+                }
+            }
 
-                mram_read(mram_offset_read, write_buf[me()], read_len);
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
 
-                mram_write(write_buf[me()], mram_offset_write, read_len);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                cur_index++;
+                    mram_read(mram_offset, write_buf, read_len);
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
             }
         }
+            break;
 
-        else{
-            for(int j=0; j<x; j++){
+        case 3:{
 
-                /*mutex_lock(my_mutex);
+            while(!init){}
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+            __mram_ptr __dma_aligned uint8_t *mram_offset;
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-                mutex_unlock(my_mutex);*/
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
+            }
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                read_len = nr_cols*sizeof(uint64_t);
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-                mram_read(mram_offset_read, write_buf[me()], read_len);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                mram_write(write_buf[me()], mram_offset_write, read_len);
+                    mram_read(mram_offset, write_buf, read_len);
 
-                cur_index++;
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
+            }
+
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+
+                    mram_read(mram_offset, write_buf, read_len);
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
             }
         }
+            break;
 
-        e[me()]=true;
-        
-    }
+        case 4:{
 
-    if(me()==4){
+            while(!init){}
 
-        while(!init){}
+            __mram_ptr __dma_aligned uint8_t *mram_offset;
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-        int cur_index=0;
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
+            }
 
-        int i=0;
-
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
-
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
 
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-                
-                /*mutex_lock(my_mutex);
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                mutex_unlock(my_mutex);*/
+                    mram_read(mram_offset, write_buf, read_len);
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+                    mram_write(write_buf, mram_offset, read_len);
 
-                read_len = nr_cols*sizeof(uint64_t);
+                    cur_index++;
+                }
+            }
 
-                mram_read(mram_offset_read, write_buf[me()], read_len);
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
 
-                mram_write(write_buf[me()], mram_offset_write, read_len);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                cur_index++;
+                    mram_read(mram_offset, write_buf, read_len);
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
             }
         }
+            break;
 
-        else{
-            for(int j=0; j<x; j++){
+        case 5:{
 
-                /*mutex_lock(my_mutex);
+            while(!init){}
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+            __mram_ptr __dma_aligned uint8_t *mram_offset;
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-                mutex_unlock(my_mutex);*/
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
+            }
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                read_len = nr_cols*sizeof(uint64_t);
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-                mram_read(mram_offset_read, write_buf[me()], read_len);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                mram_write(write_buf[me()], mram_offset_write, read_len);
+                    mram_read(mram_offset, write_buf, read_len);
 
-                cur_index++;
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
+            }
+
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+
+                    mram_read(mram_offset, write_buf, read_len);
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
             }
         }
+            break;
 
-        e[me()]=true;
-        
-    }
+        case 6:{
 
-    if(me()==5){
+            while(!init){}
 
-        while(!init){}
+            __mram_ptr __dma_aligned uint8_t *mram_offset;
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-        int cur_index=0;
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
+            }
 
-        int i=0;
-
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
-
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
 
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-                
-                /*mutex_lock(my_mutex);
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                mutex_unlock(my_mutex);*/
+                    mram_read(mram_offset, write_buf, read_len);
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+                    mram_write(write_buf, mram_offset, read_len);
 
-                read_len = nr_cols*sizeof(uint64_t);
+                    cur_index++;
+                }
+            }
 
-                mram_read(mram_offset_read, write_buf[me()], read_len);
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
 
-                mram_write(write_buf[me()], mram_offset_write, read_len);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                cur_index++;
+                    mram_read(mram_offset, write_buf, read_len);
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
             }
         }
+            break;
 
-        else{
-            for(int j=0; j<x; j++){
+        case 7:{
 
-                /*mutex_lock(my_mutex);
+            while(!init){}
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+            __mram_ptr __dma_aligned uint8_t *mram_offset;
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-                mutex_unlock(my_mutex);*/
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
+            }
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                read_len = nr_cols*sizeof(uint64_t);
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-                mram_read(mram_offset_read, write_buf[me()], read_len);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                mram_write(write_buf[me()], mram_offset_write, read_len);
+                    mram_read(mram_offset, write_buf, read_len);
 
-                cur_index++;
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
+            }
+
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+
+                    mram_read(mram_offset, write_buf, read_len);
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
             }
         }
+            break;
 
-        e[me()]=true;
-        
-    }
+        case 8:{
 
-    if(me()==6){
+            while(!init){}
 
-        while(!init){}
+            __mram_ptr __dma_aligned uint8_t *mram_offset;
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-        int cur_index=0;
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
+            }
 
-        int i=0;
-
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
-
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
 
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-                
-                /*mutex_lock(my_mutex);
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                mutex_unlock(my_mutex);*/
+                    mram_read(mram_offset, write_buf, read_len);
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+                    mram_write(write_buf, mram_offset, read_len);
 
-                read_len = nr_cols*sizeof(uint64_t);
+                    cur_index++;
+                }
+            }
 
-                mram_read(mram_offset_read, write_buf[me()], read_len);
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
 
-                mram_write(write_buf[me()], mram_offset_write, read_len);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                cur_index++;
+                    mram_read(mram_offset, write_buf, read_len);
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
             }
         }
+            break;
 
-        else{
-            for(int j=0; j<x; j++){
+        case 9:{
 
-                /*mutex_lock(my_mutex);
+            while(!init){}
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+            __mram_ptr __dma_aligned uint8_t *mram_offset;
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-                mutex_unlock(my_mutex);*/
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
+            }
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                read_len = nr_cols*sizeof(uint64_t);
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-                mram_read(mram_offset_read, write_buf[me()], read_len);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                mram_write(write_buf[me()], mram_offset_write, read_len);
+                    mram_read(mram_offset, write_buf, read_len);
 
-                cur_index++;
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
+            }
+
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+
+                    mram_read(mram_offset, write_buf, read_len);
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
             }
         }
+            break;
 
-        e[me()]=true;
-        
-    }
+         case 10:{
+    
+            while(!init){}
 
-    if(me()==7){
+            __mram_ptr __dma_aligned uint8_t *mram_offset;
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-        while(!init){}
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
+            }
 
-        int cur_index=0;
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
-        int i=0;
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
+                    mram_read(mram_offset, write_buf, read_len);
 
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-                
-                /*mutex_lock(my_mutex);
+                    mram_write(write_buf, mram_offset, read_len);
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+                    cur_index++;
+                }
+            }
 
-                mutex_unlock(my_mutex);*/
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+                    mram_read(mram_offset, write_buf, read_len);
 
-                read_len = nr_cols*sizeof(uint64_t);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                mram_read(mram_offset_read, write_buf[me()], read_len);
+                    mram_write(write_buf, mram_offset, read_len);
 
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
+                    cur_index++;
+                }
             }
         }
+            break;
 
-        else{
-            for(int j=0; j<x; j++){
+        case 11:{
+    
+            while(!init){}
 
-                /*mutex_lock(my_mutex);
+            __mram_ptr __dma_aligned uint8_t *mram_offset;
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
+            }
 
-                mutex_unlock(my_mutex);*/
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                read_len = nr_cols*sizeof(uint64_t);
+                    mram_read(mram_offset, write_buf, read_len);
 
-                mram_read(mram_offset_read, write_buf[me()], read_len);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                mram_write(write_buf[me()], mram_offset_write, read_len);
+                    mram_write(write_buf, mram_offset, read_len);
 
-                cur_index++;
+                    cur_index++;
+                }
+            }
+
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+
+                    mram_read(mram_offset, write_buf, read_len);
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
             }
         }
+            break;
 
-        e[me()]=true;
-        
-    }
+        case 12:{
+    
+            while(!init){}
 
-    if(me()==8){
+            __mram_ptr __dma_aligned uint8_t *mram_offset;
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-        while(!init){}
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
+            }
 
-        int cur_index=0;
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
-        int i=0;
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
+                    mram_read(mram_offset, write_buf, read_len);
 
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-                
-                /*mutex_lock(my_mutex);
+                    mram_write(write_buf, mram_offset, read_len);
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+                    cur_index++;
+                }
+            }
 
-                mutex_unlock(my_mutex);*/
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+                    mram_read(mram_offset, write_buf, read_len);
 
-                read_len = nr_cols*sizeof(uint64_t);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                mram_read(mram_offset_read, write_buf[me()], read_len);
+                    mram_write(write_buf, mram_offset, read_len);
 
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
+                    cur_index++;
+                }
             }
         }
+            break;
 
-        else{
-            for(int j=0; j<x; j++){
+        case 13:{
+    
+            while(!init){}
 
-                /*mutex_lock(my_mutex);
+            __mram_ptr __dma_aligned uint8_t *mram_offset;
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
+            }
 
-                mutex_unlock(my_mutex);*/
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                read_len = nr_cols*sizeof(uint64_t);
+                    mram_read(mram_offset, write_buf, read_len);
 
-                mram_read(mram_offset_read, write_buf[me()], read_len);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                mram_write(write_buf[me()], mram_offset_write, read_len);
+                    mram_write(write_buf, mram_offset, read_len);
 
-                cur_index++;
+                    cur_index++;
+                }
+            }
+
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+
+                    mram_read(mram_offset, write_buf, read_len);
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
             }
         }
+            break;
 
-        e[me()]=true;
-        
-    }
+        case 14:{
+    
+            while(!init){}
 
-    if(me()==9){
+            __mram_ptr __dma_aligned uint8_t *mram_offset;
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-        while(!init){}
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
+            }
 
-        int cur_index=0;
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
-        int i=0;
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
+                    mram_read(mram_offset, write_buf, read_len);
 
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-                
-                /*mutex_lock(my_mutex);
+                    mram_write(write_buf, mram_offset, read_len);
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+                    cur_index++;
+                }
+            }
 
-                mutex_unlock(my_mutex);*/
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+                    mram_read(mram_offset, write_buf, read_len);
 
-                read_len = nr_cols*sizeof(uint64_t);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                mram_read(mram_offset_read, write_buf[me()], read_len);
+                    mram_write(write_buf, mram_offset, read_len);
 
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
+                    cur_index++;
+                }
             }
         }
+            break;
 
-        else{
-            for(int j=0; j<x; j++){
+        case 15:{
+    
+            while(!init){}
 
-                /*mutex_lock(my_mutex);
+            __mram_ptr __dma_aligned uint8_t *mram_offset;
+            uint64_t write_buf[16];
+            int cur_index=0;
+            int i=0;
+            uint64_t read_len=nr_cols*sizeof(uint64_t);
 
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
+            while(i<num_with_one_more && i<me()){
+                cur_index += index_len+1;
+                i++;
+            }
 
-                mutex_unlock(my_mutex);*/
+            while(i<me()){
+                cur_index += rows_per_tasklet;
+                i++;
+            }
 
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+            if(i<num_with_one_more){
+                for(int j=0; j<rows_per_tasklet+1; j++){
 
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
 
-                read_len = nr_cols*sizeof(uint64_t);
+                    mram_read(mram_offset, write_buf, read_len);
 
-                mram_read(mram_offset_read, write_buf[me()], read_len);
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
 
-                mram_write(write_buf[me()], mram_offset_write, read_len);
+                    mram_write(write_buf, mram_offset, read_len);
 
-                cur_index++;
+                    cur_index++;
+                }
+            }
+
+            else{
+                for(int j=0; j<rows_per_tasklet; j++){
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += read_buf[cur_index]*nr_cols*sizeof(uint64_t);
+
+                    mram_read(mram_offset, write_buf, read_len);
+
+                    mram_offset = DPU_MRAM_HEAP_POINTER;
+                    mram_offset += (nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
+
+                    mram_write(write_buf, mram_offset, read_len);
+
+                    cur_index++;
+                }
             }
         }
-
-        e[me()]=true;
-        
-    }
-
-    if(me()==10){
-
-        while(!init){}
-
-        int cur_index=0;
-
-        int i=0;
-
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
-
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
-
-
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-                
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
-            }
-        }
-
-        else{
-            for(int j=0; j<x; j++){
-
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
-            }
-        }
-
-        e[me()]=true;
-        
-    }
-
-    if(me()==11){
-
-        while(!init){}
-
-        int cur_index=0;
-
-        int i=0;
-
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
-
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
-
-
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-                
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
-            }
-        }
-
-        else{
-            for(int j=0; j<x; j++){
-
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
-            }
-        }
-
-        e[me()]=true;
-        
-    }
-
-    if(me()==12){
-
-        while(!init){}
-
-        int cur_index=0;
-
-        int i=0;
-
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
-
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
-
-
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-                
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
-            }
-        }
-
-        else{
-            for(int j=0; j<x; j++){
-
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
-            }
-        }
-
-        e[me()]=true;
-        
-    }
-
-    if(me()==13){
-
-        while(!init){}
-
-        int cur_index=0;
-
-        int i=0;
-
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
-
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
-
-
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-                
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
-            }
-        }
-
-        else{
-            for(int j=0; j<x; j++){
-
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
-            }
-        }
-
-        e[me()]=true;
-        
-    }
-
-    if(me()==14){
-
-        while(!init){}
-
-        int cur_index=0;
-
-        int i=0;
-
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
-
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
-
-
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-                
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
-            }
-        }
-
-        else{
-            for(int j=0; j<x; j++){
-
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
-            }
-        }
-
-        e[me()]=true;
-        
-    }
-
-    if(me()==15){
-
-        while(!init){}
-
-        int cur_index=0;
-
-        int i=0;
-
-        while(i<a && i<me()){
-            cur_index += x+1;
-            i++;
-        }
-
-        while(i<me()){
-            cur_index += x;
-            i++;
-        }
-
-
-        if(i<a){
-            for(int j=0; j<x+1; j++){
-                
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
-            }
-        }
-
-        else{
-            for(int j=0; j<x; j++){
-
-                /*mutex_lock(my_mutex);
-
-                printf("me():%d,  j:%d,  cur_index:%d,  read_buf[cur_index]:%lu\n", me(), j, cur_index, read_buf[cur_index]);
-
-                mutex_unlock(my_mutex);*/
-
-                mram_offset_read = DPU_MRAM_HEAP_POINTER+read_buf[cur_index]*nr_cols*sizeof(uint64_t);
-
-                mram_offset_write = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len+cur_index*nr_cols)*sizeof(uint64_t);
-
-                read_len = nr_cols*sizeof(uint64_t);
-
-                mram_read(mram_offset_read, write_buf[me()], read_len);
-
-                mram_write(write_buf[me()], mram_offset_write, read_len);
-
-                cur_index++;
-            }
-        }
-
-        e[me()]=true;
-
-        while(!e[0] || !e[1] || !e[2] || !e[3] || !e[4] || !e[5] || !e[6] || !e[7] || !e[8] || !e[9] || !e[10] || !e[11] || !e[12] || !e[13] || !e[14] || !e[15]){};
-
-        mram_offset_read = DPU_MRAM_HEAP_POINTER+(nr_rows*nr_cols+index_len)*sizeof(uint64_t);
-
-        mram_offset_write = DPU_MRAM_HEAP_POINTER+nr_rows*nr_cols*sizeof(uint64_t);
-
-        write_len = nr_cols*sizeof(uint64_t);
-        
-        for(int j=0; j<index_len; j++){
-
-            mram_read(mram_offset_read, write_buf[me()], write_len);
-
-            mram_write(write_buf[me()], mram_offset_write, write_len);
-
-            mram_offset_read += write_len;
-            mram_offset_write += write_len;
-
-        }
+            break;
     }
 
     return 0;

@@ -41,31 +41,31 @@ void populate_mram(uint64_t nr_rows, uint64_t nr_cols, double *data) {
     Params:
     1. ans: a pointer that be updated with the rows that we lookup
     2. input: a pointer containing the specific rows we want to lookup
-    3. length: contains the number of rows that we want to lookup from the table
+    3. index_len: contains the number of rows that we want to lookup from the table
     4. nr_rows: number of rows of the embedding table
     5. nr_cols: number of columns of the embedding table
 
     Result:
     This function updates ans with the elements of the rows that we have lookedup
 */
-void lookup(double *ans, uint64_t* input, uint64_t length, uint64_t nr_rows, uint64_t nr_cols){
+void lookup(double *ans, uint64_t* input, uint64_t index_len, uint64_t nr_rows, uint64_t nr_cols){
 
-    uint64_t offset=nr_cols*nr_rows*sizeof(uint64_t);
+    uint64_t offset=(nr_rows*nr_cols+index_len)*sizeof(uint64_t);
 
-    uint64_t write_len=length*sizeof(uint64_t);
+    uint64_t write_len=index_len*sizeof(uint64_t);
 
-    uint64_t read_len=length*nr_cols*sizeof(uint64_t);
+    uint64_t read_len=index_len*nr_cols*sizeof(uint64_t);
 
-    DPU_ASSERT(dpu_copy_to(set, "index_len_input", 0, (const uint8_t *)&length, sizeof(length)));
+    DPU_ASSERT(dpu_copy_to(set, "index_len_input", 0, (const uint8_t *)&index_len, sizeof(index_len)));
     DPU_ASSERT(dpu_copy_to(set, DPU_MRAM_HEAP_POINTER_NAME, nr_cols*nr_rows*sizeof(uint64_t), (const uint8_t *)input, write_len));
 
     dpu_launch(set, DPU_SYNCHRONOUS);
 
     DPU_FOREACH(set, dpu) {
-        DPU_ASSERT(dpu_log_read(dpu, stdout));
+        //DPU_ASSERT(dpu_log_read(dpu, stdout));
         DPU_ASSERT(dpu_copy_from(dpu, DPU_MRAM_HEAP_POINTER_NAME, offset , (double*)ans, read_len));
         
-        for (int i=0; i<length; i++){
+        for (int i=0; i<index_len; i++){
             for (int j=0; j<nr_cols; j++)
 	            printf("ans[%d][%d] = %f\n", (uint64_t)input[i], j, ans[i*nr_cols+j]);
 	    }
