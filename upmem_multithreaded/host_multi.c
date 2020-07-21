@@ -18,7 +18,6 @@ struct dpu_set_t set, dpu;
     1. nr_rows: number of rows of the embedding table
     2. nr_cols: number of columns of the embedding table
     3. data: a pointer of the size nr_rows*nr_cols that contains the elements inside the embedding table
-
     Result:
     This function writes nr_rows, nr_cols, and data using dpu_copy_to from DRAM to MRAM
 */
@@ -44,7 +43,6 @@ void populate_mram(uint64_t nr_rows, uint64_t nr_cols, double *data) {
     3. index_len: contains the number of rows that we want to lookup from the table
     4. nr_rows: number of rows of the embedding table
     5. nr_cols: number of columns of the embedding table
-
     Result:
     This function updates ans with the elements of the rows that we have lookedup
 */
