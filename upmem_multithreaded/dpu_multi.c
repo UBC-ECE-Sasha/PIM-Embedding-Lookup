@@ -11,7 +11,7 @@ __mram_noinit uint64_t col_size_input;
 __mram_noinit uint64_t index_len_input;
 
 __dma_aligned uint64_t read_buf[256];
-__dma_aligned uint64_t write_buf[8][512];
+__dma_aligned uint64_t write_buf[8][256];
 
 __dma_aligned uint64_t cur_index[8];
 __dma_aligned uint64_t base_index[8];
@@ -80,37 +80,53 @@ int main() {
             base_index[me()] = cur_index[me()];
 
             if(i<num_with_one_more){
-                for(int j=0; j<rows_per_tasklet+1; j++){
+                int j=0; 
+
+                while(j<rows_per_tasklet+1){
                     
                     mram_offset_0 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_0 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_0, &write_buf[me()][j*nr_cols], read_len);
+                    mram_read(mram_offset_0, &write_buf[me()][(j%256)*nr_cols], read_len);
 
                     cur_index[me()]++;
+                    
+                    j++; 
+
+                    if(j%256==0 || j==rows_per_tasklet+1){
+                            mram_offset_0 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_0 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_0, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
                 }
-
-                mram_offset_0 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_0 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
-
-                mram_write(write_buf[me()], mram_offset_0, read_len*(rows_per_tasklet+1));
             }
 
             else{
-                for(int j=0; j<rows_per_tasklet; j++){
+                int j=0; 
 
+                while(j<rows_per_tasklet){
+                    
                     mram_offset_0 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_0 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_0, &write_buf[me()][j*nr_cols], read_len);
+                    mram_read(mram_offset_0, &write_buf[me()][(j%256)*nr_cols], read_len);
 
                     cur_index[me()]++;
-                }
-                
-                mram_offset_0 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_0 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+                    
+                    j++; 
 
-                mram_write(write_buf[me()], mram_offset_0, read_len*rows_per_tasklet);
+                    if(j%256==0 || j==rows_per_tasklet){
+                            mram_offset_0 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_0 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_0, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
+                }
             }
         }
             break;
@@ -135,37 +151,53 @@ int main() {
             base_index[me()] = cur_index[me()];
 
             if(i<num_with_one_more){
-                for(int j=0; j<rows_per_tasklet+1; j++){
+                int j=0; 
 
+                while(j<rows_per_tasklet+1){
+                    
                     mram_offset_1 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_1 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_1, &write_buf[me()][j*nr_cols], read_len);
+                    mram_read(mram_offset_1, &write_buf[me()][(j%256)*nr_cols], read_len);
 
                     cur_index[me()]++;
-                }
-                
-                mram_offset_1 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_1 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+                    
+                    j++; 
 
-                mram_write(write_buf[me()], mram_offset_1, read_len*(rows_per_tasklet+1));
+                    if(j%256==0 || j==rows_per_tasklet+1){
+                            mram_offset_1 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_1 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_1, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
+                }
             }
 
             else{
-                for(int j=0; j<rows_per_tasklet; j++){
+                int j=0; 
 
+                while(j<rows_per_tasklet){
+                    
                     mram_offset_1 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_1 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_1, &write_buf[me()][j*nr_cols], read_len);
+                    mram_read(mram_offset_1, &write_buf[me()][(j%256)*nr_cols], read_len);
 
                     cur_index[me()]++;
-                }
-                
-                mram_offset_1 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_1 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+                    
+                    j++; 
 
-                mram_write(write_buf[me()], mram_offset_1, read_len*rows_per_tasklet);
+                    if(j%256==0 || j==rows_per_tasklet){
+                            mram_offset_1 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_1 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_1, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
+                }
             }
         }
             break;
@@ -189,37 +221,53 @@ int main() {
             base_index[me()] = cur_index[me()];
 
             if(i<num_with_one_more){
-                for(int j=0; j<rows_per_tasklet+1; j++){
+                int j=0; 
 
+                while(j<rows_per_tasklet+1){
+                    
                     mram_offset_2 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_2 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_2, &write_buf[me()][j*nr_cols], read_len);
+                    mram_read(mram_offset_2, &write_buf[me()][(j%256)*nr_cols], read_len);
 
                     cur_index[me()]++;
+                    
+                    j++; 
+
+                    if(j%256==0 || j==rows_per_tasklet+1){
+                            mram_offset_2 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_2 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_2, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
                 }
-
-                mram_offset_2 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_2 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
-
-                mram_write(write_buf[me()], mram_offset_2, read_len*(rows_per_tasklet+1));
             }
 
             else{
-                for(int j=0; j<rows_per_tasklet; j++){
+                int j=0; 
 
+                while(j<rows_per_tasklet){
+                    
                     mram_offset_2 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_2 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_2, &write_buf[me()][j*nr_cols], read_len);
+                    mram_read(mram_offset_2, &write_buf[me()][(j%256)*nr_cols], read_len);
 
                     cur_index[me()]++;
-                }
-                
-                mram_offset_2 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_2 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+                    
+                    j++; 
 
-                mram_write(write_buf[me()], mram_offset_2, read_len*rows_per_tasklet);
+                    if(j%256==0 || j==rows_per_tasklet){
+                            mram_offset_2 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_2 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_2, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
+                }
             }
         }
             break;
@@ -243,37 +291,53 @@ int main() {
             base_index[me()] = cur_index[me()];
 
             if(i<num_with_one_more){
-                for(int j=0; j<rows_per_tasklet+1; j++){
+                int j=0; 
 
+                while(j<rows_per_tasklet+1){
+                    
                     mram_offset_3 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_3 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_3, &write_buf[me()][j*nr_cols], read_len);
-    
+                    mram_read(mram_offset_3, &write_buf[me()][(j%256)*nr_cols], read_len);
+
                     cur_index[me()]++;
+                    
+                    j++; 
+
+                    if(j%256==0 || j==rows_per_tasklet+1){
+                            mram_offset_3 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_3 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_3, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
                 }
-
-                mram_offset_3 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_3 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
-
-                mram_write(write_buf[me()], mram_offset_3, read_len*(rows_per_tasklet+1));
             }
 
             else{
-                for(int j=0; j<rows_per_tasklet; j++){
+                int j=0; 
 
+                while(j<rows_per_tasklet){
+                    
                     mram_offset_3 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_3 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_3, &write_buf[me()][j*nr_cols], read_len);
+                    mram_read(mram_offset_3, &write_buf[me()][(j%256)*nr_cols], read_len);
 
                     cur_index[me()]++;
-                }
-                
-                mram_offset_3 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_3 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+                    
+                    j++; 
 
-                mram_write(write_buf[me()], mram_offset_3, read_len*rows_per_tasklet);
+                    if(j%256==0 || j==rows_per_tasklet){
+                            mram_offset_3 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_3 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_3, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
+                }
             }
         }
             break;
@@ -297,37 +361,53 @@ int main() {
             base_index[me()] = cur_index[me()];
 
             if(i<num_with_one_more){
-                for(int j=0; j<rows_per_tasklet+1; j++){
+                int j=0; 
 
+                while(j<rows_per_tasklet+1){
+                    
                     mram_offset_4 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_4 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_4, &write_buf[me()][j*nr_cols], read_len);
+                    mram_read(mram_offset_4, &write_buf[me()][(j%256)*nr_cols], read_len);
 
                     cur_index[me()]++;
+                    
+                    j++; 
+
+                    if(j%256==0 || j==rows_per_tasklet+1){
+                            mram_offset_4 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_4 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_4, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
                 }
-
-                mram_offset_4 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_4 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
-
-                mram_write(write_buf[me()], mram_offset_4, read_len*(rows_per_tasklet+1));
             }
 
             else{
-                for(int j=0; j<rows_per_tasklet; j++){
+                int j=0; 
 
+                while(j<rows_per_tasklet){
+                    
                     mram_offset_4 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_4 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_4, &write_buf[me()][j*nr_cols], read_len);
+                    mram_read(mram_offset_4, &write_buf[me()][(j%256)*nr_cols], read_len);
 
                     cur_index[me()]++;
+                    
+                    j++; 
+
+                    if(j%256==0 || j==rows_per_tasklet){
+                            mram_offset_4 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_4 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_4, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
                 }
-
-                mram_offset_4 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_4 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
-
-                mram_write(write_buf[me()], mram_offset_4, read_len*rows_per_tasklet);
             }
         }
             break;
@@ -351,37 +431,53 @@ int main() {
             base_index[me()] = cur_index[me()];
 
             if(i<num_with_one_more){
-                for(int j=0; j<rows_per_tasklet+1; j++){
+                int j=0; 
 
+                while(j<rows_per_tasklet+1){
+                    
                     mram_offset_5 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_5 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_5, &write_buf[me()][j*nr_cols], read_len);
+                    mram_read(mram_offset_5, &write_buf[me()][(j%256)*nr_cols], read_len);
 
                     cur_index[me()]++;
-                }
-                
-                mram_offset_5 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_5 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+                    
+                    j++; 
 
-                mram_write(write_buf[me()], mram_offset_5, read_len*(rows_per_tasklet+1));
+                    if(j%256==0 || j==rows_per_tasklet+1){
+                            mram_offset_5 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_5 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_5, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
+                }
             }
 
             else{
-                for(int j=0; j<rows_per_tasklet; j++){
+                int j=0; 
 
+                while(j<rows_per_tasklet){
+                    
                     mram_offset_5 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_5 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_5, &write_buf[me()][j*nr_cols], read_len);
+                    mram_read(mram_offset_5, &write_buf[me()][(j%256)*nr_cols], read_len);
 
                     cur_index[me()]++;
-                }
-                
-                mram_offset_5 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_5 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+                    
+                    j++; 
 
-                mram_write(write_buf[me()], mram_offset_5, read_len*rows_per_tasklet);
+                    if(j%256==0 || j==rows_per_tasklet){
+                            mram_offset_5 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_5 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_5, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
+                }
             }
         }
             break;
@@ -405,37 +501,53 @@ int main() {
             base_index[me()] = cur_index[me()];
 
             if(i<num_with_one_more){
-                for(int j=0; j<rows_per_tasklet+1; j++){
+                int j=0; 
 
+                while(j<rows_per_tasklet+1){
+                    
                     mram_offset_6 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_6 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_6, &write_buf[me()][j*nr_cols], read_len);
+                    mram_read(mram_offset_6, &write_buf[me()][(j%256)*nr_cols], read_len);
 
                     cur_index[me()]++;
-                }
-                
-                mram_offset_6 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_6 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+                    
+                    j++; 
 
-                mram_write(write_buf[me()], mram_offset_6, read_len*(rows_per_tasklet+1));
+                    if(j%256==0 || j==rows_per_tasklet+1){
+                            mram_offset_6 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_6 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_6, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
+                }
             }
 
             else{
-                for(int j=0; j<rows_per_tasklet; j++){
+                int j=0; 
 
+                while(j<rows_per_tasklet){
+                    
                     mram_offset_6 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_6 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_6, &write_buf[me()][j*nr_cols], read_len);
+                    mram_read(mram_offset_6, &write_buf[me()][(j%256)*nr_cols], read_len);
 
                     cur_index[me()]++;
-                }
-                
-                mram_offset_6 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_6 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+                    
+                    j++; 
 
-                mram_write(write_buf[me()], mram_offset_6, read_len*rows_per_tasklet);
+                    if(j%256==0 || j==rows_per_tasklet){
+                            mram_offset_6 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_6 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_6, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
+                }
             }
         }
             break;
@@ -459,37 +571,53 @@ int main() {
             base_index[me()] = cur_index[me()];
 
             if(i<num_with_one_more){
-                for(int j=0; j<rows_per_tasklet+1; j++){
+                int j=0; 
 
+                while(j<rows_per_tasklet+1){
+                    
                     mram_offset_7 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_7 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_7, &write_buf[me()][j*nr_cols], read_len);
+                    mram_read(mram_offset_7, &write_buf[me()][(j%256)*nr_cols], read_len);
 
                     cur_index[me()]++;
-                }
-                
-                mram_offset_7 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_7 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+                    
+                    j++; 
 
-                mram_write(write_buf[me()], mram_offset_7, read_len*(rows_per_tasklet+1));
+                    if(j%256==0 || j==rows_per_tasklet+1){
+                            mram_offset_7 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_7 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_7, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
+                }
             }
 
             else{
-                for(int j=0; j<rows_per_tasklet; j++){
+                int j=0; 
 
+                while(j<rows_per_tasklet){
+                    
                     mram_offset_7 = DPU_MRAM_HEAP_POINTER;
                     mram_offset_7 += read_buf[cur_index[me()]]*nr_cols*sizeof(uint64_t);
 
-                    mram_read(mram_offset_7, &write_buf[me()][j*nr_cols], read_len);
+                    mram_read(mram_offset_7, &write_buf[me()][(j%256)*nr_cols], read_len);
 
                     cur_index[me()]++;
-                }
-            
-                mram_offset_7 = DPU_MRAM_HEAP_POINTER;
-                mram_offset_7 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+                    
+                    j++; 
 
-                mram_write(write_buf[me()], mram_offset_7, read_len*rows_per_tasklet);
+                    if(j%256==0 || j==rows_per_tasklet){
+                            mram_offset_7 = DPU_MRAM_HEAP_POINTER;
+                            mram_offset_7 += (nr_rows*nr_cols+index_len+base_index[me()]*nr_cols)*sizeof(uint64_t);
+
+                            mram_write(write_buf[me()], mram_offset_7, read_len*(rows_per_tasklet+1));
+                            
+                            base_index[me()] = cur_index[me()];
+                    }
+                }
             }
         }
             break;
