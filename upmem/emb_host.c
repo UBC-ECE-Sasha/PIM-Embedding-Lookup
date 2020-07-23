@@ -45,22 +45,23 @@ void populate_mram(uint64_t nr_rows, uint64_t nr_cols, double *data) {
 
 void copy_emb(uint32_t nr_emb, uint32_t *nr_rows, uint32_t *nr_cols, int32_t *emb_data){
     uint32_t curr_emb_size=0;
-    int32_t **emb_buffer=malloc(26*sizeof(int32_t*));
+    int32_t **emb_buffer=(int32_t**)malloc(26*sizeof(int32_t*));
     uint32_t data_ptr=0;
     uint32_t nr_buffer=0;
     uint32_t *nr_dpus, *first_indices, *last_indices;
     uint32_t curr_nr_rows, curr_nr_cols;
+    struct dpu_set_t set, dpu, dpu_rank;
 
     for (int i=0; i<nr_emb; i++){
         curr_nr_rows=nr_rows[i];
         curr_nr_cols=nr_cols[i];
-        curr_emb_size=curr=curr_nr_rows*curr_nr_cols;
+        curr_emb_size=curr_nr_rows*curr_nr_cols;
         if(curr_emb_size<MAX_CAPACITY){
             nr_dpus[i]=1;
             first_indices[nr_buffer]=0;
             last_indices[nr_buffer]=curr_emb_size;
             emb_buffer[nr_buffer]=(int32_t*)malloc(curr_emb_size*sizeof(int32_t));
-            for (j=0; j<curr_emb_size; j++){
+            for (int j=0; j<curr_emb_size; j++){
                 emb_buffer[nr_buffer][j]=emb_data[data_ptr+j];
             }
             nr_buffer++;
@@ -73,11 +74,11 @@ void copy_emb(uint32_t nr_emb, uint32_t *nr_rows, uint32_t *nr_cols, int32_t *em
                 first_indices[nr_buffer]=curr_nr_cols*curr_nr_rows-curr_emb_size;
                 last_indices[nr_buffer]=first_indices[nr_buffer]+MAX_CAPACITY;
                 emb_buffer[nr_buffer]=(int32_t*)malloc(MAX_CAPACITY*sizeof(int32_t));
-                for (j=0; j<MAX_CAPACITY; j++){
+                for (int j=0; j<MAX_CAPACITY; j++){
                 emb_buffer[nr_buffer][j]=emb_data[data_ptr+j];
                 }
                 nr_buffer++;
-                realloc(emb_buffer, nr_buffer*sizeof(int32_t*));
+                emb_buffer=(int32_t**)realloc(emb_buffer, nr_buffer*sizeof(int32_t*));
                 curr_emb_size-=MAX_CAPACITY;
                 data_ptr+=MAX_CAPACITY;
             }
@@ -85,7 +86,7 @@ void copy_emb(uint32_t nr_emb, uint32_t *nr_rows, uint32_t *nr_cols, int32_t *em
                 first_indices[nr_buffer]=curr_nr_cols*curr_nr_rows-curr_emb_size;
                 last_indices[nr_buffer]=curr_nr_cols*curr_nr_rows;
                 emb_buffer[nr_buffer]=(int32_t*)malloc(curr_emb_size*sizeof(int32_t));
-                for (j=0; j<curr_emb_size; j++){
+                for (int j=0; j<curr_emb_size; j++){
                     emb_buffer[nr_buffer][j]=emb_data[data_ptr+j];
                 }
                 nr_buffer++;
@@ -100,6 +101,7 @@ void copy_emb(uint32_t nr_emb, uint32_t *nr_rows, uint32_t *nr_cols, int32_t *em
     uint32_t emb_ptr=0;
     uint32_t alloc_buffers=0;
     uint32_t curr_first_index, curr_last_index;
+    uint8_t dpu_id,rank_id;
     DPU_FOREACH(set, dpu, dpu_id){
         if(nr_dpus[emb_ptr]>0){
             curr_nr_cols=nr_cols[emb_ptr];
@@ -140,7 +142,7 @@ void copy_emb(uint32_t nr_emb, uint32_t *nr_rows, uint32_t *nr_cols, int32_t *em
     Result:
     This function updates ans with the elements of the rows that we have lookedup
 */
-void lookup(double *ans, uint64_t* input, uint64_t length, uint64_t nr_rows, uint64_t nr_cols){
+void lookup(int32_t *ans, int32_t* input, uint64_t length, uint64_t nr_rows, uint64_t nr_cols){
 
     uint64_t offset=nr_cols*nr_rows*sizeof(uint64_t);
     uint64_t write_len=length*sizeof(uint64_t);
@@ -152,14 +154,18 @@ void lookup(double *ans, uint64_t* input, uint64_t length, uint64_t nr_rows, uin
     dpu_launch(set, DPU_SYNCHRONOUS);
 
     DPU_FOREACH(set, dpu) {
-        DPU_ASSERT(dpu_copy_from(dpu, DPU_MRAM_HEAP_POINTER_NAME, offset , (double*)ans, read_len));
+        DPU_ASSERT(dpu_copy_from(dpu, DPU_MRAM_HEAP_POINTER_NAME, offset , (int32_t*)ans, read_len));
         for (int i=0; i<length; i++){
             for (int j=0; j<nr_cols; j++)
-	            printf("ans[%d][%d] = %f\n", (uint64_t)input[i], j, ans[i*nr_cols+j]);
+	            printf("ans[%d][%d] = %d\n", (int32_t)input[i], j, ans[i*nr_cols+j]);
 	    }
     }
     dpu_free(set);
 }
 
 int main(){
+    uint32_t row[]={2,3};
+    uint32_t cols[]={2,3};
+    int32_t data[]={1,2,3,4,2,4,6,8,10,12,14,16,18};
+    copy_emb(2,row,cols,data);
 }
