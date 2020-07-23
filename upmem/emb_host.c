@@ -7,9 +7,13 @@
 #include <dpu_log.h>
 #include <stdlib.h>
 
+#include "common.h"
+
 #ifndef DPU_BINARY
 #define DPU_BINARY "./emb_dpu_lookup"
 #endif
+
+#define MAX_CAPACITY MEGABYTE(60)
 
 struct dpu_set_t set, dpu;
 
@@ -37,6 +41,94 @@ void populate_mram(uint64_t nr_rows, uint64_t nr_cols, double *data) {
     return;
 }
 
+
+
+void copy_emb(uint32_t nr_emb, uint32_t *nr_rows, uint32_t *nr_cols, int32_t *emb_data){
+    uint32_t curr_emb_size=0;
+    int32_t **emb_buffer=malloc(26*sizeof(int32_t*));
+    uint32_t data_ptr=0;
+    uint32_t nr_buffer=0;
+    uint32_t *nr_dpus, *first_indices, *last_indices;
+    uint32_t curr_nr_rows, curr_nr_cols;
+
+    for (int i=0; i<nr_emb; i++){
+        curr_nr_rows=nr_rows[i];
+        curr_nr_cols=nr_cols[i];
+        curr_emb_size=curr=curr_nr_rows*curr_nr_cols;
+        if(curr_emb_size<MAX_CAPACITY){
+            nr_dpus[i]=1;
+            first_indices[nr_buffer]=0;
+            last_indices[nr_buffer]=curr_emb_size;
+            emb_buffer[nr_buffer]=(int32_t*)malloc(curr_emb_size*sizeof(int32_t));
+            for (j=0; j<curr_emb_size; j++){
+                emb_buffer[nr_buffer][j]=emb_data[data_ptr+j];
+            }
+            nr_buffer++;
+            data_ptr+=curr_emb_size;
+        }
+        else{
+            nr_dpus[i]=0;
+            while(curr_emb_size>MAX_CAPACITY){
+                nr_dpus[i]++;
+                first_indices[nr_buffer]=curr_nr_cols*curr_nr_rows-curr_emb_size;
+                last_indices[nr_buffer]=first_indices[nr_buffer]+MAX_CAPACITY;
+                emb_buffer[nr_buffer]=(int32_t*)malloc(MAX_CAPACITY*sizeof(int32_t));
+                for (j=0; j<MAX_CAPACITY; j++){
+                emb_buffer[nr_buffer][j]=emb_data[data_ptr+j];
+                }
+                nr_buffer++;
+                realloc(emb_buffer, nr_buffer*sizeof(int32_t*));
+                curr_emb_size-=MAX_CAPACITY;
+                data_ptr+=MAX_CAPACITY;
+            }
+            if(curr_emb_size>0){
+                first_indices[nr_buffer]=curr_nr_cols*curr_nr_rows-curr_emb_size;
+                last_indices[nr_buffer]=curr_nr_cols*curr_nr_rows;
+                emb_buffer[nr_buffer]=(int32_t*)malloc(curr_emb_size*sizeof(int32_t));
+                for (j=0; j<curr_emb_size; j++){
+                    emb_buffer[nr_buffer][j]=emb_data[data_ptr+j];
+                }
+                nr_buffer++;
+                nr_dpus[i]++;
+                data_ptr+=curr_emb_size;
+            }
+        }
+    }
+    DPU_ASSERT(dpu_alloc(nr_buffer, NULL, &set));
+    DPU_ASSERT(dpu_load(set, DPU_BINARY, NULL));
+
+    uint32_t emb_ptr=0;
+    uint32_t alloc_buffers=0;
+    uint32_t curr_first_index, curr_last_index;
+    DPU_FOREACH(set, dpu, dpu_id){
+        if(nr_dpus[emb_ptr]>0){
+            curr_nr_cols=nr_cols[emb_ptr];
+            curr_nr_rows=nr_rows[emb_ptr];
+            curr_first_index=first_indices[dpu_id];
+            curr_last_index=last_indices[dpu_id];
+
+            DPU_ASSERT(dpu_copy_to(set, "row_size_input", 0, (const uint32_t *)&curr_nr_rows, sizeof(curr_nr_rows)));
+            DPU_ASSERT(dpu_copy_to(set, "col_size_input", 0, (const uint32_t *)&curr_nr_cols, sizeof(curr_nr_cols)));
+            DPU_ASSERT(dpu_copy_to(set, "first_index_input", 0, (const uint32_t *)&nr_rows, sizeof(curr_first_index)));
+            DPU_ASSERT(dpu_copy_to(set, "last_index_input", 0, (const uint32_t *)&nr_cols, sizeof(curr_last_index)));
+
+            DPU_ASSERT(dpu_prepare_xfer(dpu, emb_buffer[alloc_buffers]));
+            free(emb_buffer[alloc_buffers]);
+
+            nr_dpus[emb_ptr]--;
+            alloc_buffers++;
+        }
+        else
+            emb_ptr++;
+    }
+    DPU_RANK_FOREACH(set,dpu_rank, rank_id){
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "emb_input", 0, MAX_CAPACITY, DPU_XFER_DEFAULT));
+    }
+    return;
+}
+
+
+
 /*
     Params:
     1. ans: a pointer that be updated with the rows that we lookup
@@ -51,9 +143,7 @@ void populate_mram(uint64_t nr_rows, uint64_t nr_cols, double *data) {
 void lookup(double *ans, uint64_t* input, uint64_t length, uint64_t nr_rows, uint64_t nr_cols){
 
     uint64_t offset=nr_cols*nr_rows*sizeof(uint64_t);
-
     uint64_t write_len=length*sizeof(uint64_t);
-
     uint64_t read_len=length*nr_cols*sizeof(uint64_t);
 
     DPU_ASSERT(dpu_copy_to(set, "index_len_input", 0, (const uint8_t *)&length, sizeof(length)));
@@ -68,7 +158,6 @@ void lookup(double *ans, uint64_t* input, uint64_t length, uint64_t nr_rows, uin
 	            printf("ans[%d][%d] = %f\n", (uint64_t)input[i], j, ans[i*nr_cols+j]);
 	    }
     }
-
     dpu_free(set);
 }
 
