@@ -10,6 +10,8 @@ __mram_noinit uint64_t row_size_input;
 __mram_noinit uint64_t col_size_input;
 __mram_noinit uint64_t index_len_input;
 
+__host __mram_ptr int32_t *data;
+
 __mram_ptr __dma_aligned uint8_t *mram_offset;
 
 int main() {

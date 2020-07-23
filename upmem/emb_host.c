@@ -10,7 +10,7 @@
 #include "common.h"
 
 #ifndef DPU_BINARY
-#define DPU_BINARY "./emb_dpu_lookup"
+#define DPU_BINARY "emb_dpu_lookup"
 #endif
 
 #define MAX_CAPACITY MEGABYTE(60)
@@ -94,6 +94,7 @@ void copy_emb(uint32_t nr_emb, uint32_t *nr_rows, uint32_t *nr_cols, int32_t *em
                 data_ptr+=curr_emb_size;
             }
         }
+        emb_buffer[nr_buffer]=(int32_t*)realloc(emb_buffer[nr_buffer], MAX_CAPACITY*sizeof(int32_t));
     }
     DPU_ASSERT(dpu_alloc(nr_buffer, NULL, &set));
     DPU_ASSERT(dpu_load(set, DPU_BINARY, NULL));
@@ -129,7 +130,20 @@ void copy_emb(uint32_t nr_emb, uint32_t *nr_rows, uint32_t *nr_cols, int32_t *em
     return;
 }
 
+void toy_example(){
+    int32_t buffer[4]={1,2,3,4};
 
+    DPU_ASSERT(dpu_alloc(1, NULL, &set));
+    DPU_ASSERT(dpu_load(set, DPU_BINARY, NULL)); 
+
+    int dpu_id;
+    struct dpu_set_t dpu, set;
+    DPU_FOREACH(set, dpu, dpu_id){
+        DPU_ASSERT(dpu_prepare_xfer(dpu, buffer));
+    }
+
+    DPU_ASSERT(dpu_push_xfer(set, DPU_XFER_TO_DPU, "data", 0, 4*sizeof(int32_t), DPU_XFER_DEFAULT));
+}
 
 /*
     Params:
@@ -167,5 +181,7 @@ int main(){
     uint32_t row[]={2,3};
     uint32_t cols[]={2,3};
     int32_t data[]={1,2,3,4,2,4,6,8,10,12,14,16,18};
-    copy_emb(2,row,cols,data);
+    toy_example();
+
+    //copy_emb(2,row,cols,data);
 }
