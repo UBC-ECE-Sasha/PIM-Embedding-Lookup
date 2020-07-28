@@ -46,7 +46,7 @@ void populate_mram(uint64_t nr_rows, uint64_t nr_cols, double *data) {
     Result:
     This function updates ans with the elements of the rows that we have lookedup
 */
-void lookup(double *ans, uint64_t* input, uint64_t index_len, uint64_t nr_rows, uint64_t nr_cols){
+void lookup(double *ans, uint64_t *input, uint64_t index_len, uint64_t nr_rows, uint64_t nr_cols){
 
     uint64_t offset=(nr_rows*nr_cols+index_len)*sizeof(uint64_t);
 
@@ -68,7 +68,7 @@ void lookup(double *ans, uint64_t* input, uint64_t index_len, uint64_t nr_rows, 
 	            printf("ans[%d][%d] = %f\n", (uint64_t)input[i], j, ans[i*nr_cols+j]);
 	    }
     }
-
+    
     dpu_free(set);
 }
 
