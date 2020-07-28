@@ -19,31 +19,18 @@ struct dpu_set_t set, dpu, dpu_rank;
 
 /*
     Params:
-    1. nr_rows: number of rows of the embedding table
-    2. nr_cols: number of columns of the embedding table
-    3. data: a pointer of the size nr_rows*nr_cols that contains the elements inside the embedding table
+    1. nr_rows: array of number of rows of the embedding tables
+    2. nr_cols: aaray of number of columns of the embedding tables
+    3. data: a pointer of the size |for (embedding in embedding_tables): sum+=nr_rows*nr_cols| 
+    that contains the elements inside all the embedding tables
 
     Result:
-    This function writes nr_rows, nr_cols, and data using dpu_copy_to from DRAM to MRAM
+    This function breaks down each embedding table into chunks of maximum MAX_CAPACITY
+    and pushes each chunk to one dpu as well as number of rows and columns of the corresponding
+    table with the first and last index held in each dpu.
 */
-void populate_mram(uint64_t nr_rows, uint64_t nr_cols, double *data) {
 
-    uint64_t write_len=nr_cols*nr_rows*sizeof(uint64_t);
-
-    DPU_ASSERT(dpu_alloc(1, NULL, &set));
-    DPU_ASSERT(dpu_load(set, DPU_BINARY, NULL));
-
-    DPU_ASSERT(dpu_copy_to(set, "row_size_input", 0, (const uint8_t *)&nr_rows, sizeof(nr_rows)));
-    DPU_ASSERT(dpu_copy_to(set, "col_size_input", 0, (const uint8_t *)&nr_cols, sizeof(nr_cols)));
-    
-    DPU_ASSERT(dpu_copy_to(set, DPU_MRAM_HEAP_POINTER_NAME, 0, (const uint8_t *)data, write_len));
-
-    return;
-}
-
-
-
-void copy_emb(uint32_t nr_emb, uint32_t *nr_rows, uint32_t *nr_cols, int32_t *emb_data){
+void populate_mram(uint32_t nr_emb, uint32_t *nr_rows, uint32_t *nr_cols, int32_t *emb_data){
     uint32_t curr_emb_size=0;
     uint32_t nr_buffer=0;
     uint32_t nr_dpus[nr_emb], indices_len=nr_emb;
@@ -169,5 +156,5 @@ int main(){
     uint32_t row[]={2,2,2,2};
     uint32_t cols[]={4,4,4,4};
     int32_t data[]={1,2,3,4,5,6,7,8,2,4,6,8,10,12,14,16,3,6,9,12,15,18,21,24,4,8,12,16,20,24,28,32};
-    copy_emb(4,row,cols, data);
+    populate_mram(4,row,cols, data);
 }
