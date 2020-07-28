@@ -10,12 +10,12 @@
 #include "common.h"
 
 #ifndef DPU_BINARY
-#define DPU_BINARY "emb_dpu_lookup"
+#define DPU_BINARY "toy_dpu"
 #endif
 
-#define MAX_CAPACITY MEGABYTE(60)
+#define MAX_CAPACITY 2 //MEGABYTE(60)
 
-struct dpu_set_t set, dpu;
+struct dpu_set_t set, dpu, dpu_rank;
 
 /*
     Params:
@@ -45,57 +45,52 @@ void populate_mram(uint64_t nr_rows, uint64_t nr_cols, double *data) {
 
 void copy_emb(uint32_t nr_emb, uint32_t *nr_rows, uint32_t *nr_cols, int32_t *emb_data){
     uint32_t curr_emb_size=0;
-    int32_t **emb_buffer=(int32_t**)malloc(26*sizeof(int32_t*));
-    uint32_t data_ptr=0;
     uint32_t nr_buffer=0;
-    uint32_t *nr_dpus, *first_indices, *last_indices;
+    uint32_t nr_dpus[nr_emb], indices_len=nr_emb;
+    uint32_t *first_indices=(uint32_t*)malloc(nr_emb*sizeof(uint32_t));
+    uint32_t *last_indices=(uint32_t*)malloc(nr_emb*sizeof(uint32_t));
     uint32_t curr_nr_rows, curr_nr_cols;
-    struct dpu_set_t set, dpu, dpu_rank;
 
     for (int i=0; i<nr_emb; i++){
         curr_nr_rows=nr_rows[i];
         curr_nr_cols=nr_cols[i];
         curr_emb_size=curr_nr_rows*curr_nr_cols;
-        if(curr_emb_size<MAX_CAPACITY){
+        if( curr_emb_size<= MAX_CAPACITY){
             nr_dpus[i]=1;
             first_indices[nr_buffer]=0;
             last_indices[nr_buffer]=curr_emb_size;
-            emb_buffer[nr_buffer]=(int32_t*)malloc(curr_emb_size*sizeof(int32_t));
-            for (int j=0; j<curr_emb_size; j++){
-                emb_buffer[nr_buffer][j]=emb_data[data_ptr+j];
-            }
             nr_buffer++;
-            data_ptr+=curr_emb_size;
         }
         else{
-            nr_dpus[i]=0;
-            while(curr_emb_size>MAX_CAPACITY){
+            nr_dpus[i]=(int)(curr_emb_size/MAX_CAPACITY);
+            if(curr_emb_size%MAX_CAPACITY!=0){
                 nr_dpus[i]++;
-                first_indices[nr_buffer]=curr_nr_cols*curr_nr_rows-curr_emb_size;
-                last_indices[nr_buffer]=first_indices[nr_buffer]+MAX_CAPACITY;
-                emb_buffer[nr_buffer]=(int32_t*)malloc(MAX_CAPACITY*sizeof(int32_t));
-                for (int j=0; j<MAX_CAPACITY; j++){
-                emb_buffer[nr_buffer][j]=emb_data[data_ptr+j];
-                }
-                nr_buffer++;
-                emb_buffer=(int32_t**)realloc(emb_buffer, nr_buffer*sizeof(int32_t*));
-                curr_emb_size-=MAX_CAPACITY;
-                data_ptr+=MAX_CAPACITY;
             }
-            if(curr_emb_size>0){
-                first_indices[nr_buffer]=curr_nr_cols*curr_nr_rows-curr_emb_size;
-                last_indices[nr_buffer]=curr_nr_cols*curr_nr_rows;
-                emb_buffer[nr_buffer]=(int32_t*)malloc(curr_emb_size*sizeof(int32_t));
-                for (int j=0; j<curr_emb_size; j++){
-                    emb_buffer[nr_buffer][j]=emb_data[data_ptr+j];
-                }
+            for(int j=0; j<nr_dpus[i]; j++){
+                first_indices[nr_buffer]=j*MAX_CAPACITY;
+                last_indices[nr_buffer]=MIN((j+1)*MAX_CAPACITY-1, curr_emb_size);
                 nr_buffer++;
-                nr_dpus[i]++;
-                data_ptr+=curr_emb_size;
+                indices_len++;
+                first_indices=(uint32_t*)realloc(first_indices, indices_len*sizeof(uint32_t));
+                last_indices=(uint32_t*)realloc(last_indices, indices_len*sizeof(uint32_t));
             }
         }
-        emb_buffer[nr_buffer]=(int32_t*)realloc(emb_buffer[nr_buffer], MAX_CAPACITY*sizeof(int32_t));
     }
+
+    int32_t emb_buffer[nr_buffer][MAX_CAPACITY];
+    uint32_t buffer_ptr=0,data_ptr=0;
+
+    for(int i=0; i<nr_emb; i++){
+        for(int j=0; j<nr_dpus[i]; j++){
+            for(int t=0, k=first_indices[buffer_ptr]; k<=last_indices[buffer_ptr]; k++, t++){
+                emb_buffer[buffer_ptr][t]=emb_data[data_ptr+k];
+                //printf("here for %d, %d, %d\n",i,j,emb_data[data_ptr+k]);
+            }
+            buffer_ptr++;
+        }
+        data_ptr+=nr_rows[i]*nr_cols[i];
+    }
+
     DPU_ASSERT(dpu_alloc(nr_buffer, NULL, &set));
     DPU_ASSERT(dpu_load(set, DPU_BINARY, NULL));
 
@@ -104,45 +99,38 @@ void copy_emb(uint32_t nr_emb, uint32_t *nr_rows, uint32_t *nr_cols, int32_t *em
     uint32_t curr_first_index, curr_last_index;
     uint8_t dpu_id,rank_id;
     DPU_FOREACH(set, dpu, dpu_id){
-        if(nr_dpus[emb_ptr]>0){
-            curr_nr_cols=nr_cols[emb_ptr];
-            curr_nr_rows=nr_rows[emb_ptr];
-            curr_first_index=first_indices[dpu_id];
-            curr_last_index=last_indices[dpu_id];
-
-            DPU_ASSERT(dpu_copy_to(set, "row_size_input", 0, (const uint32_t *)&curr_nr_rows, sizeof(curr_nr_rows)));
-            DPU_ASSERT(dpu_copy_to(set, "col_size_input", 0, (const uint32_t *)&curr_nr_cols, sizeof(curr_nr_cols)));
-            DPU_ASSERT(dpu_copy_to(set, "first_index_input", 0, (const uint32_t *)&nr_rows, sizeof(curr_first_index)));
-            DPU_ASSERT(dpu_copy_to(set, "last_index_input", 0, (const uint32_t *)&nr_cols, sizeof(curr_last_index)));
-
-            DPU_ASSERT(dpu_prepare_xfer(dpu, emb_buffer[alloc_buffers]));
-            free(emb_buffer[alloc_buffers]);
-
-            nr_dpus[emb_ptr]--;
-            alloc_buffers++;
-        }
-        else
+        if(nr_dpus[emb_ptr]==0)
             emb_ptr++;
+        curr_nr_cols=nr_cols[emb_ptr];
+        curr_nr_rows=nr_rows[emb_ptr];
+        curr_first_index=first_indices[dpu_id];
+        curr_last_index=last_indices[dpu_id];
+
+        DPU_ASSERT(dpu_copy_to(set, "row_size_input", 0, (const uint64_t *)&curr_nr_rows, 8));
+        DPU_ASSERT(dpu_copy_to(set, "col_size_input", 0, (const uint64_t *)&curr_nr_cols, 8));
+        DPU_ASSERT(dpu_copy_to(set, "first_index_input", 0, (const uint64_t *)&nr_rows, 8));
+        DPU_ASSERT(dpu_copy_to(set, "last_index_input", 0, (const uint64_t *)&nr_cols, 8));
+
+        DPU_ASSERT(dpu_prepare_xfer(dpu, emb_buffer[alloc_buffers]));
+        //printf("i is:%d, input:%d,%d\n",dpu_id,emb_buffer[alloc_buffers][0],emb_buffer[alloc_buffers][1]);
+
+        nr_dpus[emb_ptr]--;
+        alloc_buffers++;
     }
     DPU_RANK_FOREACH(set,dpu_rank, rank_id){
-        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "emb_input", 0, MAX_CAPACITY, DPU_XFER_DEFAULT));
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "data", 0, MAX_CAPACITY*sizeof(int32_t), DPU_XFER_DEFAULT));
     }
-    return;
-}
+    printf("done!\n");
 
-void toy_example(){
-    int32_t buffer[4]={1,2,3,4};
-
-    DPU_ASSERT(dpu_alloc(1, NULL, &set));
-    DPU_ASSERT(dpu_load(set, DPU_BINARY, NULL)); 
-
-    int dpu_id;
-    struct dpu_set_t dpu, set;
+    /* int32_t ans[MAX_CAPACITY];
     DPU_FOREACH(set, dpu, dpu_id){
-        DPU_ASSERT(dpu_prepare_xfer(dpu, buffer));
-    }
+        dpu_launch(dpu, DPU_SYNCHRONOUS);
+        DPU_ASSERT(dpu_copy_from(dpu, DPU_MRAM_HEAP_POINTER_NAME, 0 , (int32_t*)ans, 2*sizeof(int32_t)));
+        printf("%d: %d, %d\n",dpu_id,ans[0], ans[1]);
+        DPU_ASSERT(dpu_log_read(dpu, stdout));
+    } */
 
-    DPU_ASSERT(dpu_push_xfer(set, DPU_XFER_TO_DPU, "data", 0, 4*sizeof(int32_t), DPU_XFER_DEFAULT));
+    return;
 }
 
 /*
@@ -178,10 +166,8 @@ void lookup(int32_t *ans, int32_t* input, uint64_t length, uint64_t nr_rows, uin
 }
 
 int main(){
-    uint32_t row[]={2,3};
-    uint32_t cols[]={2,3};
-    int32_t data[]={1,2,3,4,2,4,6,8,10,12,14,16,18};
-    toy_example();
-
-    //copy_emb(2,row,cols,data);
+    uint32_t row[]={2,2,2,2};
+    uint32_t cols[]={4,4,4,4};
+    int32_t data[]={1,2,3,4,5,6,7,8,2,4,6,8,10,12,14,16,3,6,9,12,15,18,21,24,4,8,12,16,20,24,28,32};
+    copy_emb(4,row,cols, data);
 }
