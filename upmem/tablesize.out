@@ -1,0 +1,72 @@
+Using CPU...
+Reading pre-processed data=raw_data/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=raw_data/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+export_emb started
+done with filling data
+0th table size is:23360
+1th table size is:9328
+2th table size is:162099632
+3th table size is:35241728
+4th table size is:4880
+5th table size is:384
+6th table size is:200272
+7th table size is:10128
+8th table size is:48
+9th table size is:1490320
+10th table size is:90928
+11th table size is:133625488
+12th table size is:51104
+13th table size is:432
+14th table size is:239872
+15th table size is:87380896
+16th table size is:160
+17th table size is:90432
+18th table size is:34768
+19th table size is:64
+20th table size is:112744752
+21th table size is:288
+22th table size is:240
+23th table size is:4578896
+24th table size is:1680
+25th table size is:2281152
+making pointers
+calling populate_mram
+Running populate_mram
+done with 0th table of size 23360 with 1 buffers
+done with 1th table of size 9328 with 1 buffers
+done with 2th table of size 162099632 with 5 buffers
+done with 3th table of size 35241728 with 2 buffers
+done with 4th table of size 4880 with 1 buffers
+done with 5th table of size 384 with 1 buffers
+done with 6th table of size 200272 with 1 buffers
+done with 7th table of size 10128 with 1 buffers
+done with 8th table of size 48 with 1 buffers
+done with 9th table of size 1490320 with 1 buffers
+done with 10th table of size 90928 with 1 buffers
+done with 11th table of size 133625488 with 4 buffers
+done with 12th table of size 51104 with 1 buffers
+done with 13th table of size 432 with 1 buffers
+done with 14th table of size 239872 with 1 buffers
+done with 15th table of size 87380896 with 3 buffers
+done with 16th table of size 160 with 1 buffers
+done with 17th table of size 90432 with 1 buffers
+done with 18th table of size 34768 with 1 buffers
+done with 19th table of size 64 with 1 buffers
+done with 20th table of size 112744752 with 4 buffers
+done with 21th table of size 288 with 1 buffers
+done with 22th table of size 240 with 1 buffers
+done with 23th table of size 4578896 with 1 buffers
+done with 24th table of size 1680 with 1 buffers
+done with 25th table of size 2281152 with 1 buffers
+done first traverse of data with 39 buffers of 32768 each
+buffer allocated
+done making buffers
+emb_host.c:87(populate_mram): DPU Error (system error)

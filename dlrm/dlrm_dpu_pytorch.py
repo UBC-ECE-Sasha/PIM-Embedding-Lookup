@@ -25,7 +25,7 @@
 #    |                    ____/__\_____           ____/__\____
 #    |                   |_Emb_|____|__|    ...  |_Emb_|__|___|
 # input:
-# [ dense features ]   0  [sparse indices] , ..., [sparse indices]
+# [ dense features ]     [sparse indices] , ..., [sparse indices]
 #
 # More precise definition of model layers:
 # 1) fully connected layers of an mlp
@@ -87,31 +87,62 @@ from tricks.md_embedding_bag import PrEmbeddingBag, md_solver
 
 import sklearn.metrics
 
-#dpu
-from ctypes import *
-import threading 
-
-so_file="/root/dlrm/emblib.so"
-my_functions=CDLL(so_file)
-
-emb_dim=[]
-#dpu
-
-
 # from torchviz import make_dot
 # import torch.nn.functional as Functional
 # from torch.nn.parameter import Parameter
 
+from torch.optim.lr_scheduler import _LRScheduler
+
+#dpu
+from ctypes import *
+
+so_file="../upmem/emblib.so"
+my_functions=CDLL(so_file)
+#dpu
+
 exc = getattr(builtins, "IOError", "FileNotFoundError")
 
-return_time_begin = 0
+class LRPolicyScheduler(_LRScheduler):
+    def __init__(self, optimizer, num_warmup_steps, decay_start_step, num_decay_steps):
+        self.num_warmup_steps = num_warmup_steps
+        self.decay_start_step = decay_start_step
+        self.decay_end_step = decay_start_step + num_decay_steps
+        self.num_decay_steps = num_decay_steps
+
+        if self.decay_start_step < self.num_warmup_steps:
+            sys.exit("Learning rate warmup must finish before the decay starts")
+
+        super(LRPolicyScheduler, self).__init__(optimizer)
+
+    def get_lr(self):
+        step_count = self._step_count
+        if step_count < self.num_warmup_steps:
+            # warmup
+            scale = 1.0 - (self.num_warmup_steps - step_count) / self.num_warmup_steps
+            lr = [base_lr * scale for base_lr in self.base_lrs]
+            self.last_lr = lr
+        elif self.decay_start_step <= step_count and step_count < self.decay_end_step:
+            # decay
+            decayed_steps = step_count - self.decay_start_step
+            scale = ((self.num_decay_steps - decayed_steps) / self.num_decay_steps) ** 2
+            min_lr = 0.0000001
+            lr = [max(min_lr, base_lr * scale) for base_lr in self.base_lrs]
+            self.last_lr = lr
+        else:
+            if self.num_decay_steps > 0:
+                # freeze at last, either because we're after decay
+                # or because we're between warmup and decay
+                lr = self.last_lr
+            else:
+                # do not adjust
+                lr = self.base_lrs
+        return lr
 
 ### define dlrm in PyTorch ###
 class DLRM_Net(nn.Module):
     def create_mlp(self, ln, sigmoid_layer):
         # build MLP layer by layer
         layers = nn.ModuleList()
-
         for i in range(0, ln.size - 1):
             n = ln[i]
             m = ln[i + 1]
@@ -157,9 +188,9 @@ class DLRM_Net(nn.Module):
             if self.qr_flag and n > self.qr_threshold:
                 EE = QREmbeddingBag(n, m, self.qr_collisions,
                     operation=self.qr_operation, mode="sum", sparse=True)
-            elif self.md_flag and n > self.md_threshold:
-                _m = m[i]
+            elif self.md_flag:
                 base = max(m)
+                _m = m[i] if n > self.md_threshold else base
                 EE = PrEmbeddingBag(n, _m, base)
                 # use np initialization as below for consistency...
                 W = np.random.uniform(
@@ -181,6 +212,7 @@ class DLRM_Net(nn.Module):
                 # EE.weight.data.copy_(torch.tensor(W))
                 # approach 3
                 # EE.weight = Parameter(torch.tensor(W),requires_grad=True)
+
             emb_l.append(EE)
 
         return emb_l
@@ -237,9 +269,10 @@ class DLRM_Net(nn.Module):
             # create operators
             if ndevices <= 1:
                 self.emb_l = self.create_emb(m_spa, ln_emb)
-
             self.bot_l = self.create_mlp(ln_bot, sigmoid_bot)
             self.top_l = self.create_mlp(ln_top, sigmoid_top)
+            self.export_emb(self.emb_l)
+            exit()
 
     def apply_mlp(self, x, layers):
         # approach 1: use ModuleList
@@ -249,8 +282,7 @@ class DLRM_Net(nn.Module):
         # approach 2: use Sequential container to wrap all layers
         return layers(x)
 
-    #dpu
-    def apply_emb(self, lS_o, lS_i):
+    def apply_emb(self, lS_o, lS_i, emb_l):
         # WARNING: notice that we are processing the batch at once. We implicitly
         # assume that the data is laid out such that:
         # 1. each embedding is indexed with a group of sparse indices,
@@ -259,40 +291,51 @@ class DLRM_Net(nn.Module):
         # 3. for a list of embedding tables there is a list of batched lookups
 
         ly = []
+        for k, sparse_index_group_batch in enumerate(lS_i):
+            sparse_offset_group_batch = lS_o[k]
 
-        # embedding lookup
-        # We are using EmbeddingBag, which implicitly uses sum operator.
-        # The embeddings are represented as tall matrices, with sum
-        # happening vertically across 0 axis, resulting in a row vector
+            # embedding lookup
+            # We are using EmbeddingBag, which implicitly uses sum operator.
+            # The embeddings are represented as tall matrices, with sum
+            # happening vertically across 0 axis, resulting in a row vector
+            E = emb_l[k]
+            V = E(sparse_index_group_batch, sparse_offset_group_batch)
 
-        tread_list=[]
-        ans=[]
-
-        my_functions.lookup.argtypes= c_uint8, POINTER(c_float), POINTER(c_uint32), c_uint32, c_uint32, c_uint32
-        my_functions.lookup.restype= None
-
-        tmp=[0.0 for i in range(0, 16)]
-
-        ans=[((c_float*16)(*tmp)) for i in range(0, 26)]
-
-
-        #instantiate threads
-        for k in range(0, len(emb_dim)):
-            N = emb_dim[k]
-
-            q=(c_uint32*1)(lS_i[k].tolist()[0])
-
-            tread_list.append(threading.Thread(target=my_functions.lookup, args=(k,ans[k],q,1,N,16,)))
-            tread_list[k].start()
-
-        #join threads
-        for k in range(0, len(emb_dim)):
-            tread_list[k].join()
-            V = torch.tensor([[ans[k][i] for i in range(0, 16)]])
             ly.append(V)
 
+        # print(ly)
         return ly
-    #dpu
+
+    #export embedding tables and make them ready for MRAM
+    def export_emb(self, emb_l):
+
+        my_functions.populate_mram.argtypes = c_uint32, c_uint32, c_uint32, POINTER(c_int32)
+        my_functions.populate_mram.restype= None
+
+        for k in range(0, len(emb_l)):
+            emb_data=[]
+            tmp_emb = list(emb_l[k].parameters())[0].tolist()
+            
+            nr_rows=len(tmp_emb)
+            nr_cols=len(tmp_emb[0])
+
+            for i in range(0, nr_rows):
+                for j in range(0, nr_cols):
+                    emb_data.append(int(round(tmp_emb[i][j]*(10**9))))
+            print(str(k)+"th table size is:"+str(nr_rows*nr_cols))
+            data_pointer=(c_int32*(len(emb_data)))(*emb_data)
+            my_functions.populate_mram(k,nr_rows,nr_cols,data_pointer)
+
+        """ print("nr_rows=")
+        print(nr_rows)
+        print("-------------------------------")
+        print("nr_cols=")
+        print(nr_cols)
+        print("------------------------------------------------")
+        print("emb_data")
+        print(emb_data) """
+
+        return
 
     def interact_features(self, x, ly):
         if self.arch_interaction_op == "dot":
@@ -342,17 +385,9 @@ class DLRM_Net(nn.Module):
         # print(x.detach().cpu().numpy())
 
         # process sparse features(using embeddings), resulting in a list of row vectors
-
-        #dpu
-        start_time=time.process_time()
-
-        ly = self.apply_emb(lS_o, lS_i)
-
-        print("time for lookup: ", time.process_time()-start_time)
-        #dpu
-
-        #for y in ly:
-        #   print(y.detach().cpu().numpy())
+        ly = self.apply_emb(lS_o, lS_i, self.emb_l)
+        # for y in ly:
+        #     print(y.detach().cpu().numpy())
 
         # interact features (dense and sparse)
         z = self.interact_features(x, ly)
@@ -360,7 +395,6 @@ class DLRM_Net(nn.Module):
 
         # obtain probability of a click (using top mlp)
         p = self.apply_mlp(z, self.top_l)
-
 
         # clamp output if needed
         if 0.0 < self.loss_threshold and self.loss_threshold < 1.0:
@@ -394,7 +428,6 @@ class DLRM_Net(nn.Module):
                 d = torch.device("cuda:" + str(k % ndevices))
                 emb.to(d)
                 t_list.append(emb.to(d))
-
             self.emb_l = nn.ModuleList(t_list)
             self.parallel_model_is_not_prepared = False
 
@@ -427,7 +460,7 @@ class DLRM_Net(nn.Module):
         # print(x)
 
         # embeddings
-        ly = self.apply_emb(lS_o, lS_i)
+        ly = self.apply_emb(lS_o, lS_i, self.emb_l)
         # debug prints
         # print(ly)
 
@@ -563,6 +596,10 @@ if __name__ == "__main__":
     parser.add_argument("--mlperf-auc-threshold", type=float, default=0.0)
     parser.add_argument("--mlperf-bin-loader", action='store_true', default=False)
     parser.add_argument("--mlperf-bin-shuffle", action='store_true', default=False)
+    # LR policy
+    parser.add_argument("--lr-num-warmup-steps", type=int, default=0)
+    parser.add_argument("--lr-decay-start-step", type=int, default=0)
+    parser.add_argument("--lr-num-decay-steps", type=int, default=0)
     args = parser.parse_args()
 
     if args.mlperf_logging:
@@ -768,7 +805,6 @@ if __name__ == "__main__":
         md_threshold=args.md_threshold,
     )
     # test prints
-
     if args.debug_mode:
         print("initial parameters (weights and bias):")
         for param in dlrm.parameters():
@@ -782,7 +818,6 @@ if __name__ == "__main__":
         dlrm = dlrm.to(device)  # .cuda()
         if dlrm.ndevices > 1:
             dlrm.emb_l = dlrm.create_emb(m_spa, ln_emb)
-
 
     # specify the loss function
     if args.loss_function == "mse":
@@ -798,6 +833,8 @@ if __name__ == "__main__":
     if not args.inference_only:
         # specify the optimizer algorithm
         optimizer = torch.optim.SGD(dlrm.parameters(), lr=args.learning_rate)
+        lr_scheduler = LRPolicyScheduler(optimizer, args.lr_num_warmup_steps, args.lr_decay_start_step,
+                                         args.lr_num_decay_steps)
 
     ### main loop ###
     def time_wrap(use_gpu):
@@ -818,8 +855,6 @@ if __name__ == "__main__":
                 lS_o,
                 lS_i
             )
-
-            
         else:
             return dlrm(X, lS_o, lS_i)
 
@@ -845,6 +880,8 @@ if __name__ == "__main__":
     # training or inference
     best_gA_test = 0
     best_auc_test = 0
+    skip_upto_epoch = 0
+    skip_upto_batch = 0
     total_time = 0
     total_loss = 0
     total_accu = 0
@@ -874,34 +911,8 @@ if __name__ == "__main__":
             ld_model = torch.load(args.load_model, map_location=torch.device('cpu'))
         dlrm.load_state_dict(ld_model["state_dict"])
 
-        #dpu
-
-        for K in range(0, 26):
-        
-            tmp_emb = list(dlrm.emb_l[K].parameters())
-
-            list_emb = tmp_emb[0].tolist()
-            
-            
-            N = len(list_emb)
-            M = len(list_emb[0])
-
-            emb_dim.append(N)
-            
-            my_functions.populate_mram.argtypes = c_uint8, c_uint32, c_uint32, c_uint32, POINTER(c_float)
-            my_functions.populate_mram.restype= None
-            
-            input_emb=[]
-
-            for i in range(0, N):
-                for j in range(0, M):
-                    input_emb.append(list_emb[i][j])
-
-            pointer_emb=(c_float*(N*M))(*input_emb)
-            my_functions.populate_mram(K,1,N,M,pointer_emb)
-
-        #dpu
-
+        dlrm.export_emb(self, emb_l)
+        exit()
 
         ld_j = ld_model["iter"]
         ld_k = ld_model["epoch"]
@@ -919,10 +930,9 @@ if __name__ == "__main__":
             best_gA_test = ld_gA_test
             total_loss = ld_total_loss
             total_accu = ld_total_accu
-            k = ld_k  # epochs
-            j = ld_j  # batches
+            skip_upto_epoch = ld_k  # epochs
+            skip_upto_batch = ld_j  # batches
         else:
-            print("I am changing args.print_freq")
             args.print_freq = ld_nbatches
             args.test_freq = 0
 
@@ -945,12 +955,21 @@ if __name__ == "__main__":
     print("time/loss/accuracy (if enabled):")
     with torch.autograd.profiler.profile(args.enable_profiling, use_gpu) as prof:
         while k < args.nepochs:
+            if k < skip_upto_epoch:
+                continue
+
             accum_time_begin = time_wrap(use_gpu)
 
             if args.mlperf_logging:
                 previous_iteration_time = None
 
             for j, (X, lS_o, lS_i, T) in enumerate(train_ld):
+                if j == 0 and args.save_onnx:
+                    (X_onnx, lS_o_onnx, lS_i_onnx) = (X, lS_o, lS_i)
+
+                if j < skip_upto_batch:
+                    continue
+
                 if args.mlperf_logging:
                     current_time = time_wrap(use_gpu)
                     if previous_iteration_time:
@@ -964,37 +983,27 @@ if __name__ == "__main__":
                 # early exit if nbatches was set by the user and has been exceeded
                 if nbatches > 0 and j >= nbatches:
                     break
-
-            
+                '''
                 # debug prints
-                #print("input and targets")
-                #print(X.detach().cpu().numpy())
-                #print([np.diff(S_o.detach().cpu().tolist()
-                #       + list(lS_i[i].shape)).tolist() for i, S_o in enumerate(lS_o)])
-                #print([S_i.detach().cpu().numpy().tolist() for S_i in lS_i])
-                #print(T.detach().cpu().numpy())
-
+                print("input and targets")
+                print(X.detach().cpu().numpy())
+                print([np.diff(S_o.detach().cpu().tolist()
+                       + list(lS_i[i].shape)).tolist() for i, S_o in enumerate(lS_o)])
+                print([S_i.detach().cpu().numpy().tolist() for S_i in lS_i])
+                print(T.detach().cpu().numpy())
+                '''
 
                 # forward pass
-
-                #print("X: ", X)
-                #print("lS_o: ", lS_o)
-                #print("lS_i: ", lS_i)
-                #print("use_gpu: ", use_gpu)
-                #print("device: ", device)
-
                 Z = dlrm_wrap(X, lS_o, lS_i, use_gpu, device)
-
-                #print("Z: ", Z)
 
                 # loss
                 E = loss_fn_wrap(Z, T, use_gpu, device)
-            
+                '''
                 # debug prints
                 print("output and loss")
-                #print(Z.detach().cpu().numpy())
+                print(Z.detach().cpu().numpy())
                 print(E.detach().cpu().numpy())
-
+                '''
                 # compute loss and accuracy
                 L = E.detach().cpu().numpy()  # numpy array
                 S = Z.detach().cpu().numpy()  # numpy array
@@ -1007,8 +1016,6 @@ if __name__ == "__main__":
                     # (where we do not accumulate gradients across mini-batches)
                     optimizer.zero_grad()
                     # backward pass
-                    #print("type(E): ", type(E))
-                    #print(":E: ", E)
                     E.backward()
                     # debug prints (check gradient norm)
                     # for l in mlp.layers:
@@ -1017,6 +1024,7 @@ if __name__ == "__main__":
 
                     # optimizer
                     optimizer.step()
+                    lr_scheduler.step()
 
                 if args.mlperf_logging:
                     total_time += iteration_time
@@ -1028,12 +1036,7 @@ if __name__ == "__main__":
                 total_iter += 1
                 total_samp += mbs
 
-                #should_print = ((j + 1) % args.print_freq == 0) or (j + 1 == nbatches)
-                should_print=True
-
-                #print("args.test_freq: ", args.test_freq)
-                #print("args.data_generation: ", args.data_generation)
-                #print("j: ", j, "   args.print_freq : ", args.print_freq )
+                should_print = ((j + 1) % args.print_freq == 0) or (j + 1 == nbatches)
                 should_test = (
                     (args.test_freq > 0)
                     and (args.data_generation == "dataset")
@@ -1271,11 +1274,10 @@ if __name__ == "__main__":
 
     # export the model in onnx
     if args.save_onnx:
-        with open("dlrm_s_pytorch.onnx", "w+b") as dlrm_pytorch_onnx_file:
-            (X, lS_o, lS_i, _) = train_data[0]  # get first batch of elements
-            torch.onnx._export(
-                dlrm, (X, lS_o, lS_i), dlrm_pytorch_onnx_file, verbose=True
-            )
+        dlrm_pytorch_onnx_file = "dlrm_s_pytorch.onnx"
+        torch.onnx.export(
+            dlrm, (X_onnx, lS_o_onnx, lS_i_onnx), dlrm_pytorch_onnx_file, verbose=True, use_external_data_format=True
+        )
         # recover the model back
         dlrm_pytorch_onnx = onnx.load("dlrm_s_pytorch.onnx")
         # check the onnx model
