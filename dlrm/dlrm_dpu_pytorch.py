@@ -95,7 +95,6 @@ from torch.optim.lr_scheduler import _LRScheduler
 
 #dpu
 from ctypes import *
-import threading 
 
 so_file="../upmem/emblib.so"
 my_functions=CDLL(so_file)
@@ -309,20 +308,23 @@ class DLRM_Net(nn.Module):
 
     #export embedding tables and make them ready for MRAM
     def export_emb(self, emb_l):
-        emb_data=[]
-        nr_rows=[]
-        nr_cols=[]
-        data_len=0
+
+        my_functions.populate_mram.argtypes = c_uint32, c_uint32, c_uint32, POINTER(c_int32)
+        my_functions.populate_mram.restype= None
+
         for k in range(0, len(emb_l)):
+            emb_data=[]
             tmp_emb = list(emb_l[k].parameters())[0].tolist()
             
-            nr_rows.append(len(tmp_emb))
-            nr_cols.append(len(tmp_emb[0]))
+            nr_rows=len(tmp_emb)
+            nr_cols=len(tmp_emb[0])
 
-            for i in range(0, nr_rows[k]):
-                for j in range(0, nr_cols[k]):
-                    emb_data.append(round(tmp_emb[i][j]*(10**9)))
-                    data_len=+1
+            for i in range(0, nr_rows):
+                for j in range(0, nr_cols):
+                    emb_data.append(int(round(tmp_emb[i][j]*(10**9))))
+            print(str(k)+"th table size is:"+str(nr_rows*nr_cols))
+            data_pointer=(c_int32*(len(emb_data)))(*emb_data)
+            my_functions.populate_mram(k,nr_rows,nr_cols,data_pointer)
 
         """ print("nr_rows=")
         print(nr_rows)
@@ -333,15 +335,8 @@ class DLRM_Net(nn.Module):
         print("emb_data")
         print(emb_data) """
 
-        my_functions.populate_mram.argtypes = c_uint8, POINTER(c_uint32), POINTER(c_uint32), POINTER(c_int32)
-        my_functions.populate_mram.restype= None
-
-        nr_rows_pointer=(c_uint32*(len(emb_l)))(*nr_rows)
-        nr_cols_pointer=(c_uint32*(len(emb_l)))(*nr_cols)
-        data_pointer=(c_int32*(data_len))(*emb_data)
-        my_functions.copy_emb(len(emb_l),nr_rows_pointer,nr_cols_pointer,data_pointer)
-
-        return emb_data, nr_rows, nr_cols
+        return
+>>>>>>> d13bf89... working on granularization
 
     def interact_features(self, x, ly):
         if self.arch_interaction_op == "dot":

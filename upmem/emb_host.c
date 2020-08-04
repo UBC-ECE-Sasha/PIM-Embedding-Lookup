@@ -6,16 +6,22 @@
 #include <stdio.h>
 #include <dpu_log.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include "common.h"
 
 #ifndef DPU_BINARY
-#define DPU_BINARY "toy_dpu"
+#define DPU_BINARY "/home/upmem0016/niloo/PIM-Embedding-Lookup/upmem/toy_dpu_"
 #endif
 
-#define MAX_CAPACITY 2 //MEGABYTE(60)
+#define MAX_CAPACITY MEGABYTE(10) //Must be a multiply of 2
+#define NR_TABLES 26
 
 struct dpu_set_t set, dpu, dpu_rank;
+uint32_t nr_buffer=0, nr_dpus[NR_TABLES], indices_len=NR_TABLES;
+uint64_t *first_indices;
+uint64_t *last_indices;
+uint32_t allocated_dpus=0, buffer_ptr=0;
 
 /*
     Params:
@@ -30,91 +36,115 @@ struct dpu_set_t set, dpu, dpu_rank;
     table with the first and last index held in each dpu.
 */
 
-void populate_mram(uint32_t nr_emb, uint32_t *nr_rows, uint32_t *nr_cols, int32_t *emb_data){
-    uint32_t curr_emb_size=0;
-    uint32_t nr_buffer=0;
-    uint32_t nr_dpus[nr_emb], indices_len=nr_emb;
-    uint32_t *first_indices=(uint32_t*)malloc(nr_emb*sizeof(uint32_t));
-    uint32_t *last_indices=(uint32_t*)malloc(nr_emb*sizeof(uint32_t));
-    uint32_t curr_nr_rows, curr_nr_cols;
+void populate_mram(uint32_t table_id, uint32_t nr_rows, uint32_t nr_cols, int32_t *emb_data){
+    uint64_t table_size=nr_rows*nr_cols;
+    uint32_t max_buffer_len;
 
-    for (int i=0; i<nr_emb; i++){
-        curr_nr_rows=nr_rows[i];
-        curr_nr_cols=nr_cols[i];
-        curr_emb_size=curr_nr_rows*curr_nr_cols;
-        if( curr_emb_size<= MAX_CAPACITY){
-            nr_dpus[i]=1;
-            first_indices[nr_buffer]=0;
-            last_indices[nr_buffer]=curr_emb_size;
+    if (table_id==0){
+        first_indices=(uint64_t*)malloc(NR_TABLES*sizeof(uint64_t));
+        last_indices=(uint64_t*)malloc(NR_TABLES*sizeof(uint64_t));
+    }
+
+    if( table_size <= MAX_CAPACITY){
+        nr_dpus[table_id]=1;
+        first_indices[nr_buffer]=0;
+        last_indices[nr_buffer]=table_size-1;
+        nr_buffer++;
+        max_buffer_len=table_size;
+    }
+    else{
+        nr_dpus[table_id]=(int)((table_size*1.0)/(MAX_CAPACITY*1.0));
+        if(table_size%MAX_CAPACITY!=0){
+            nr_dpus[table_id]++;
+        }
+        for(int j=0; j<nr_dpus[table_id]; j++){
+            first_indices[nr_buffer]=j*MAX_CAPACITY;
+            //last_indices[nr_buffer]=MIN( ((j+1)*(MAX_CAPACITY))-1 , table_size-1);
+            if(table_size<((j+1)*(MAX_CAPACITY)-1))
+                last_indices[nr_buffer]=table_size-1;
+            else
+                last_indices[nr_buffer]=(j+1)*(MAX_CAPACITY)-1;
             nr_buffer++;
-        }
-        else{
-            nr_dpus[i]=(int)(curr_emb_size/MAX_CAPACITY);
-            if(curr_emb_size%MAX_CAPACITY!=0){
-                nr_dpus[i]++;
-            }
-            for(int j=0; j<nr_dpus[i]; j++){
-                first_indices[nr_buffer]=j*MAX_CAPACITY;
-                last_indices[nr_buffer]=MIN((j+1)*MAX_CAPACITY-1, curr_emb_size);
-                nr_buffer++;
-                indices_len++;
-                first_indices=(uint32_t*)realloc(first_indices, indices_len*sizeof(uint32_t));
-                last_indices=(uint32_t*)realloc(last_indices, indices_len*sizeof(uint32_t));
-            }
+            indices_len++;
+            first_indices=(uint64_t*)realloc(first_indices, indices_len*sizeof(uint64_t));
+            last_indices=(uint64_t*)realloc(last_indices, indices_len*sizeof(uint64_t));
+            max_buffer_len=MAX_CAPACITY;
         }
     }
+    printf("first traverse of %dth table of size %d with %d buffers of %d each and %d buffers up to now.\n",
+    table_id,table_size,nr_dpus[table_id], MAX_CAPACITY, nr_buffer);
 
-    int32_t emb_buffer[nr_buffer][MAX_CAPACITY];
-    uint32_t buffer_ptr=0,data_ptr=0;
+    int32_t *emb_buffer[nr_dpus[table_id]];
+    uint32_t first_index, last_index;
 
-    for(int i=0; i<nr_emb; i++){
-        for(int j=0; j<nr_dpus[i]; j++){
-            for(int t=0, k=first_indices[buffer_ptr]; k<=last_indices[buffer_ptr]; k++, t++){
-                emb_buffer[buffer_ptr][t]=emb_data[data_ptr+k];
-                //printf("here for %d, %d, %d\n",i,j,emb_data[data_ptr+k]);
-            }
-            buffer_ptr++;
+    for(int j=0; j<nr_dpus[table_id]; j++){
+        first_index=first_indices[buffer_ptr];
+        last_index=last_indices[buffer_ptr];
+        printf("mallocing %d for %dth buffer.\n",last_index-first_index+1,buffer_ptr);
+        emb_buffer[j]=(int32_t*)malloc((last_index-first_index+1)*sizeof(int32_t));
+        for(int k=0; k<last_index-first_index+1; k++){
+            emb_buffer[j][k]=emb_data[first_index+k];
+            //printf("here for %d element of %d buffer from %d data\n",k,j,first_index*j+k);
         }
-        data_ptr+=nr_rows[i]*nr_cols[i];
+        buffer_ptr++;
     }
 
-    DPU_ASSERT(dpu_alloc(nr_buffer, NULL, &set));
-    DPU_ASSERT(dpu_load(set, DPU_BINARY, NULL));
+    printf("allocating %d dpus and %d dpus allocated before.\n",nr_dpus[table_id],allocated_dpus);
+    printf("%s",dpu_alloc(nr_dpus[table_id], NULL, &set));
+    printf("DPUs allocated\n");
 
-    uint32_t emb_ptr=0;
-    uint32_t alloc_buffers=0;
-    uint32_t curr_first_index, curr_last_index;
+    uint32_t len;
     uint8_t dpu_id,rank_id;
     DPU_FOREACH(set, dpu, dpu_id){
-        if(nr_dpus[emb_ptr]==0)
-            emb_ptr++;
-        curr_nr_cols=nr_cols[emb_ptr];
-        curr_nr_rows=nr_rows[emb_ptr];
-        curr_first_index=first_indices[dpu_id];
-        curr_last_index=last_indices[dpu_id];
+        first_index=first_indices[allocated_dpus+dpu_id];
+        last_index=last_indices[allocated_dpus+dpu_id];
+        len= last_index-first_index+1;
 
-        DPU_ASSERT(dpu_copy_to(set, "row_size_input", 0, (const uint64_t *)&curr_nr_rows, 8));
-        DPU_ASSERT(dpu_copy_to(set, "col_size_input", 0, (const uint64_t *)&curr_nr_cols, 8));
-        DPU_ASSERT(dpu_copy_to(set, "first_index_input", 0, (const uint64_t *)&nr_rows, 8));
-        DPU_ASSERT(dpu_copy_to(set, "last_index_input", 0, (const uint64_t *)&nr_cols, 8));
+        if(len<len< (MEGABYTE(1)/16))
+            DPU_ASSERT(dpu_load(dpu, "/home/upmem0016/niloo/PIM-Embedding-Lookup/upmem/toy_dpu_64KB", NULL));
+        else if(len< (MEGABYTE(1)/8))
+            DPU_ASSERT(dpu_load(dpu, "/home/upmem0016/niloo/PIM-Embedding-Lookup/upmem/toy_dpu_125KB", NULL));
+        else if( len< (MEGABYTE(1)/4) )
+            DPU_ASSERT(dpu_load(dpu, "/home/upmem0016/niloo/PIM-Embedding-Lookup/upmem/toy_dpu_250KB", NULL));
+        else if (len< (MEGABYTE(1)/2))
+            DPU_ASSERT(dpu_load(dpu, "/home/upmem0016/niloo/PIM-Embedding-Lookup/upmem/toy_dpu_250KB", NULL));
+        else if(len< MEGABYTE(1))
+            DPU_ASSERT(dpu_load(dpu, "/home/upmem0016/niloo/PIM-Embedding-Lookup/upmem/toy_dpu_1MB", NULL));
+        else if(len< MEGABYTE(2))
+            DPU_ASSERT(dpu_load(dpu, "/home/upmem0016/niloo/PIM-Embedding-Lookup/upmem/toy_dpu_2MB", NULL));
+        else if (len< MEGABYTE(4))
+            DPU_ASSERT(dpu_load(dpu, "/home/upmem0016/niloo/PIM-Embedding-Lookup/upmem/toy_dpu_4MB", NULL));
+        else if (len<MEGABYTE(8))
+            DPU_ASSERT(dpu_load(dpu, "/home/upmem0016/niloo/PIM-Embedding-Lookup/upmem/toy_dpu_8MB", NULL));
+        else
+            DPU_ASSERT(dpu_load(dpu, "/home/upmem0016/niloo/PIM-Embedding-Lookup/upmem/toy_dpu_10MB", NULL));
 
-        DPU_ASSERT(dpu_prepare_xfer(dpu, emb_buffer[alloc_buffers]));
+        DPU_ASSERT(dpu_copy_to(dpu, "row_size_input", 0, (const uint64_t *)&nr_rows, sizeof(uint64_t)));
+        DPU_ASSERT(dpu_copy_to(dpu, "col_size_input", 0, (const uint64_t *)&nr_cols, sizeof(uint64_t)));
+        DPU_ASSERT(dpu_copy_to(dpu, "first_index_input", 0, (const uint64_t *)&first_index, sizeof(uint64_t)));
+        DPU_ASSERT(dpu_copy_to(dpu, "last_index_input", 0, (const uint64_t *)&last_index, sizeof(uint64_t)));
+
+        DPU_ASSERT(dpu_copy_to(dpu, DPU_MRAM_HEAP_POINTER_NAME, 0, (const int32_t *)emb_buffer[dpu_id], ALIGN(len,8)));
+        //DPU_ASSERT(dpu_prepare_xfer(dpu, emb_buffer[alloc_buffers]));
         //printf("i is:%d, input:%d,%d\n",dpu_id,emb_buffer[alloc_buffers][0],emb_buffer[alloc_buffers][1]);
+    }
+    printf("buffers prepared\n");
+     allocated_dpus+=nr_dpus[table_id];
 
-        nr_dpus[emb_ptr]--;
-        alloc_buffers++;
-    }
-    DPU_RANK_FOREACH(set,dpu_rank, rank_id){
-        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "data", 0, MAX_CAPACITY*sizeof(int32_t), DPU_XFER_DEFAULT));
-    }
-    printf("done!\n");
+    /* DPU_RANK_FOREACH(set,dpu_rank, rank_id){
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "data", 0, max_buffer_len*sizeof(int32_t), DPU_XFER_DEFAULT));
+    } */
+    printf("done with table %d!\n",table_id);
+
+    for (int i=0; i<nr_dpus[table_id]; i++)
+        free(emb_buffer[i]);
 
     /* int32_t ans[MAX_CAPACITY];
     DPU_FOREACH(set, dpu, dpu_id){
         dpu_launch(dpu, DPU_SYNCHRONOUS);
         DPU_ASSERT(dpu_copy_from(dpu, DPU_MRAM_HEAP_POINTER_NAME, 0 , (int32_t*)ans, 2*sizeof(int32_t)));
         printf("%d: %d, %d\n",dpu_id,ans[0], ans[1]);
-        DPU_ASSERT(dpu_log_read(dpu, stdout));
+        //DPU_ASSERT(dpu_log_read(dpu, stdout));
     } */
 
     return;
@@ -153,8 +183,8 @@ void lookup(int32_t *ans, int32_t* input, uint64_t length, uint64_t nr_rows, uin
 }
 
 int main(){
-    uint32_t row[]={2,2,2,2};
-    uint32_t cols[]={4,4,4,4};
-    int32_t data[]={1,2,3,4,5,6,7,8,2,4,6,8,10,12,14,16,3,6,9,12,15,18,21,24,4,8,12,16,20,24,28,32};
-    populate_mram(4,row,cols, data);
+    //uint32_t row[]={2,3,2,2,2};
+    //uint32_t cols[]={4,3,4,4,1};
+    //int32_t data[]={1,2,3,4,5,6,7,8,2,4,6,8,10,12,14,16,18,3,6,9,12,15,18,21,24,4,8,12,16,20,24,28,32,5,10};
+    //populate_mram(5,row,cols, data);
 }
