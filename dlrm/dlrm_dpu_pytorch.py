@@ -96,7 +96,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 #dpu
 from ctypes import *
 
-so_file="../upmem/emblib.so"
+so_file="/home/upmem0016/niloo/PIM-Embedding-Lookup/upmem/emblib.so"
 my_functions=CDLL(so_file)
 #dpu
 
@@ -309,7 +309,7 @@ class DLRM_Net(nn.Module):
     #export embedding tables and make them ready for MRAM
     def export_emb(self, emb_l):
 
-        my_functions.populate_mram.argtypes = c_uint32, c_uint32, c_uint32, POINTER(c_int32)
+        my_functions.populate_mram.argtypes = c_uint32, c_uint64, c_uint64, POINTER(c_int32)
         my_functions.populate_mram.restype= None
 
         for k in range(0, len(emb_l)):
@@ -322,21 +322,10 @@ class DLRM_Net(nn.Module):
             for i in range(0, nr_rows):
                 for j in range(0, nr_cols):
                     emb_data.append(int(round(tmp_emb[i][j]*(10**9))))
-            print(str(k)+"th table size is:"+str(nr_rows*nr_cols))
             data_pointer=(c_int32*(len(emb_data)))(*emb_data)
             my_functions.populate_mram(k,nr_rows,nr_cols,data_pointer)
-
-        """ print("nr_rows=")
-        print(nr_rows)
-        print("-------------------------------")
-        print("nr_cols=")
-        print(nr_cols)
-        print("------------------------------------------------")
-        print("emb_data")
-        print(emb_data) """
-
+            
         return
->>>>>>> d13bf89... working on granularization
 
     def interact_features(self, x, ly):
         if self.arch_interaction_op == "dot":

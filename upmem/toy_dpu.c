@@ -1,25 +1,37 @@
+// To build the code: dpu-upmem-dpurte-clang -o toy_dpu toy_dpu.c
 #include <mram.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-
-__mram_noinit int32_t data[2];
 
 __mram_noinit uint64_t row_size_input;
 __mram_noinit uint64_t col_size_input;
 __mram_noinit uint64_t first_index_input;
 __mram_noinit uint64_t last_index_input;
 
-int main() { 
-    __dma_aligned int32_t read_buf[2];
+__mram_ptr __dma_aligned uint8_t *mram_offset;
 
-    for (int i=0; i<2; i++){
-        read_buf[i]=data[i];
-        printf("%dth is %d\n", i, data[i]);
-    }
+int main() {
 
-    //write the contents of the write_buf in MRAM, replacing the contents of read_buf
-    mram_write((const int32_t*)read_buf, DPU_MRAM_HEAP_POINTER, 2*sizeof(int32_t));
-    
+    uint64_t nr_rows= row_size_input;
+    uint64_t nr_cols=col_size_input;
+    uint64_t first_index=first_index_input;
+    uint64_t last_index=last_index_input;
+    uint64_t b=nr_rows+nr_cols+first_index+last_index;
+
+    __dma_aligned int32_t write_buf[2],read_buf[2];
+    __dma_aligned int32_t first,last;
+
+    mram_read(DPU_MRAM_HEAP_POINTER, read_buf, 2*sizeof(int32_t));
+    printf("In dpu first: %d, %d\n",read_buf[0],read_buf[1]);
+    write_buf[0]=read_buf[0];
+    mram_offset+=(last_index-first_index-1)*sizeof(int32_t);
+    mram_read(mram_offset, read_buf, 2*sizeof(int32_t));
+    printf("In dpu last: %d, %d\n",read_buf[0],read_buf[1]);
+    write_buf[1]=read_buf[1];
+
+    mram_write((const int32_t*)write_buf, mram_offset+sizeof(int32_t), 2*sizeof(int32_t));
+
+
     return 0;
 }
