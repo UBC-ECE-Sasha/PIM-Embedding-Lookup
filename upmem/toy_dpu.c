@@ -9,7 +9,7 @@ __mram_noinit uint64_t col_size_input;
 __mram_noinit uint64_t first_index_input;
 __mram_noinit uint64_t last_index_input;
 
-__mram_ptr __dma_aligned uint8_t *mram_offset;
+__mram_ptr __dma_aligned int32_t *mram_offset;
 
 int main() {
 
@@ -22,10 +22,11 @@ int main() {
     __dma_aligned int32_t write_buf[2],read_buf[2];
     __dma_aligned int32_t first,last;
 
+    mram_offset=DPU_MRAM_HEAP_POINTER;
     mram_read(DPU_MRAM_HEAP_POINTER, read_buf, 2*sizeof(int32_t));
     printf("In dpu first: %d, %d\n",read_buf[0],read_buf[1]);
     write_buf[0]=read_buf[0];
-    mram_offset+=(last_index-first_index-1)*sizeof(int32_t);
+    mram_offset+=(last_index-first_index-1);
     mram_read(mram_offset, read_buf, 2*sizeof(int32_t));
     printf("In dpu last: %d, %d\n",read_buf[0],read_buf[1]);
     write_buf[1]=read_buf[1];
