@@ -34,11 +34,8 @@ struct embedding_table{
 };
 
 uint32_t total_buffers=0, buffer_per_table[NR_TABLES], indices_len=NR_TABLES;
-//uint64_t *first_indices, *last_indices, table_rows[NR_TABLES], table_cols[NR_TABLES];
-//uint64_t *dpu_first_row, *dpu_last_row;
-uint32_t ready_buffers=0, allocated_dpus=0; //buff_table_id[DPUS_PER_RANK];
+uint32_t ready_buffers=0, allocated_dpus=0;
 struct dpu_set_t *table_dpus[NR_TABLES];
-//int32_t *emb_buffer[DPUS_PER_RANK];
 struct embedding_buffer *buffers;
 struct embedding_table tables[NR_TABLES];
 /*
@@ -56,25 +53,13 @@ struct embedding_table tables[NR_TABLES];
 
 void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_t *table_data){
     uint64_t table_size=nr_rows*nr_cols;
-    //uint32_t max_buffer_len;
-
-    //table_rows[table_id]=nr_rows;
-    //table_cols[table_id]=nr_cols;
 
     if (table_id==0){
-        //first_indices=(uint64_t*)malloc(NR_TABLES*sizeof(uint64_t));
-        //last_indices=(uint64_t*)malloc(NR_TABLES*sizeof(uint64_t));
-        //dpu_first_row=(uint64_t*)malloc(NR_TABLES*sizeof(uint64_t));
-        //dpu_last_row=(uint64_t*)malloc(NR_TABLES*sizeof(uint64_t));
         buffers=(struct embedding_buffer*)malloc(NR_TABLES*sizeof(struct embedding_buffer));
     }
 
     if( table_size <= MAX_CAPACITY){
         buffer_per_table[table_id]=1;
-        //first_indices[total_buffers]=0;
-        //dpu_first_row[total_buffers]=0;
-        //last_indices[total_buffers]=table_size-1;
-        //dpu_last_row[total_buffers]=nr_rows-1;
         buffers[total_buffers].first_index=0;
         buffers[total_buffers].last_index=table_size-1;
         buffers[total_buffers].first_row=0;
@@ -87,22 +72,12 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             buffer_per_table[table_id]++;
         }
         for(int j=0; j<buffer_per_table[table_id]; j++){
-            //first_indices[total_buffers+j]=j*MAX_CAPACITY;
-            //dpu_first_row[total_buffers+j]=j*MAX_CAPACITY/nr_cols;
-            //last_indices[total_buffers+j]=MIN(table_size-1, ((j+1)*MAX_CAPACITY)-1);
-            //dpu_last_row[total_buffers+j]=MIN(nr_rows-1, ((j+1)*MAX_CAPACITY)/nr_cols-1);
-            //first_indices=(uint64_t*)realloc(first_indices, indices_len*sizeof(uint64_t));
-            //last_indices=(uint64_t*)realloc(last_indices, indices_len*sizeof(uint64_t));
-            //dpu_first_row=(uint64_t*)realloc(dpu_first_row, indices_len*sizeof(uint64_t));
-            //dpu_last_row=(uint64_t*)realloc(dpu_last_row, indices_len*sizeof(uint64_t));
             indices_len++;
             buffers[total_buffers+j].first_index=j*MAX_CAPACITY;
             buffers[total_buffers+j].last_index=MIN(table_size-1, ((j+1)*MAX_CAPACITY)-1);
             buffers[total_buffers+j].first_row=j*MAX_CAPACITY/nr_cols;
             buffers[total_buffers+j].last_row=MIN(nr_rows-1, ((j+1)*MAX_CAPACITY)/nr_cols-1);
             buffers=(struct embedding_buffer*)realloc(buffers, indices_len*(sizeof(struct embedding_buffer)));
-            //max_buffer_len=MAX_CAPACITY*sizeof(int32_t);
-            //buff_table_id[ready_buffers+j]=table_id;
             buffers[total_buffers+j].table_id=table_id;
         }
     tables[table_id].first_buffer_index=total_buffers;
@@ -117,11 +92,8 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
         first_index=buffers[total_buffers].first_index;
         last_index=buffers[total_buffers].last_index;
         //printf("mallocing %d for %dth buffer of %d.\n",ALIGN((last_index-first_index+1)*sizeof(int32_t),8), ready_buffers,total_buffers);
-        //emb_buffer[ready_buffers]=(int32_t*)malloc(ALIGN((last_index-first_index+1)*sizeof(int32_t),8));
         buffers[ready_buffers].data=(int32_t*)malloc(ALIGN((last_index-first_index+1)*sizeof(int32_t),8));
-        //buff_table_id[ready_buffers]=table_id;
         for(int k=0; k<last_index-first_index+1; k++){
-            //emb_buffer[ready_buffers][k]=table_data[first_index+k];
             buffers[ready_buffers].data[k]=table_data[first_index+k];
         }
         //printf("first: %d, last: %d for %d buffer\n",emb_buffer[ready_buffers][0],emb_buffer[ready_buffers][last_index-first_index],total_buffers);
@@ -155,19 +127,19 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
         /* int32_t ans[4];
         DPU_FOREACH(set, dpu, dpu_id){
             dpu_launch(dpu, DPU_SYNCHRONOUS);
-            first_index=first_indices[allocated_dpus+dpu_id];
-            last_index=last_indices[allocated_dpus+dpu_id];
-            //printf("first: %d, 2nd: %d, -1: %d, last: %dfor %d buffer\n",emb_buffer[dpu_id][0],emb_buffer[dpu_id][1],
-            emb_buffer[dpu_id][last_index-first_index-1],emb_buffer[dpu_id][last_index-first_index],dpu_id);
+            first_index=buffers[allocated_dpus+dpu_id].first_index;
+            last_index=buffers[allocated_dpus+dpu_id].last_index;
+            printf("first: %d, 2nd: %d, -1: %d, last: %dfor %d buffer\n",buffers[dpu_id].data[0],buffers[dpu_id].data[1],
+            buffers[dpu_id].data[last_index-first_index-1],buffers[dpu_id].data[last_index-first_index],dpu_id);
             uint32_t offset= (last_index-first_index+1)*sizeof(int32_t);
             DPU_ASSERT(dpu_copy_from(dpu, DPU_MRAM_HEAP_POINTER_NAME, offset , (int32_t*)ans, 4*sizeof(int32_t)));
             //printf("%d: %d, %d\n",dpu_id,ans[0], ans[1]);
             DPU_ASSERT(dpu_log_read(dpu, stdout));
-        } */
+        }*/
 
-    for (int i=0; i<ready_buffers; i++)
+    /*for (int i=0; i<ready_buffers; i++)
         //free(emb_buffer[i]);
-        free(buffers[ready_buffers].data);
+        free((int32_t*)(buffers[ready_buffers].data));*/
         
     allocated_dpus+=ready_buffers;
     ready_buffers=0;
