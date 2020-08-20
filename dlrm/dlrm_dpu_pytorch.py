@@ -271,8 +271,9 @@ class DLRM_Net(nn.Module):
                 self.emb_l = self.create_emb(m_spa, ln_emb)
             self.bot_l = self.create_mlp(ln_bot, sigmoid_bot)
             self.top_l = self.create_mlp(ln_top, sigmoid_top)
-            self.export_emb(self.emb_l)
-            exit()
+            #print("make export running")
+            #self.export_emb(self.emb_l)
+    
 
     def apply_mlp(self, x, layers):
         # approach 1: use ModuleList
@@ -283,6 +284,7 @@ class DLRM_Net(nn.Module):
         return layers(x)
 
     def apply_emb(self, lS_o, lS_i, emb_l):
+        print("doing emb lookup")
         # WARNING: notice that we are processing the batch at once. We implicitly
         # assume that the data is laid out such that:
         # 1. each embedding is indexed with a group of sparse indices,
@@ -300,10 +302,13 @@ class DLRM_Net(nn.Module):
             # happening vertically across 0 axis, resulting in a row vector
             E = emb_l[k]
             V = E(sparse_index_group_batch, sparse_offset_group_batch)
-
+            #print("V:"+str(len(V)))
+            #print(str(k))
+            #print(str(sparse_index_group_batch))
+            #print(str(sparse_offset_group_batch))
             ly.append(V)
 
-        # print(ly)
+        #print(ly)
         return ly
 
     #export embedding tables and make them ready for MRAM
@@ -900,9 +905,8 @@ if __name__ == "__main__":
             # when targeting inference on CPU
             ld_model = torch.load(args.load_model, map_location=torch.device('cpu'))
         dlrm.load_state_dict(ld_model["state_dict"])
-
-        dlrm.export_emb(self, emb_l)
-        exit()
+        print("load export running")
+        dlrm.export_emb(dlrm.emb_l)
 
         ld_j = ld_model["iter"]
         ld_k = ld_model["epoch"]

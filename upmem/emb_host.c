@@ -104,10 +104,13 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
     }
     printf("done with %d table\n",table_id);
 
-    if(ready_buffers==DPUS_PER_RANK || table_id==NR_TABLES-1){
+    if(ready_buffers>=DPUS_PER_RANK || table_id==NR_TABLES-1){
         struct dpu_set_t set, dpu, dpu_rank;
         printf("allocating %d dpus and %d dpus allocated before.\n",ready_buffers,allocated_dpus);
-        DPU_ASSERT(dpu_alloc(ready_buffers, NULL, &set));
+        if(ready_buffers<= DPUS_PER_RANK)
+            DPU_ASSERT(dpu_alloc(ready_buffers, NULL, &set));
+        else
+            DPU_ASSERT(dpu_alloc(DPUS_PER_RANK, NULL, &set));
         DPU_ASSERT(dpu_load(set, DPU_BINARY, NULL));
 
         uint32_t len;
@@ -141,24 +144,30 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             DPU_ASSERT(dpu_log_read(dpu, stdout));
         }*/
 
-    for (int i=0; i<ready_buffers; i++)
-        free(buffers[i]->data);
+        for (int i=0; i<ready_buffers; i++)
+            free(buffers[i]->data);
 
-    for (int i=0; i<NR_TABLES; i++){
-        tables[i].dpus=(struct dpu_set_t**)malloc(tables[i].nr_buffers*sizeof(struct dpu_set_t*));
-    }
-    uint32_t table_ptr=0,tmp_ptr=0;
-    DPU_FOREACH(set, dpu,dpu_id){
-        if(tables[table_ptr].nr_buffers==tmp_ptr){
-            table_ptr++;
-            tmp_ptr=0;
+        for (int i=0; i<NR_TABLES; i++){
+            tables[i].dpus=(struct dpu_set_t**)malloc(tables[i].nr_buffers*sizeof(struct dpu_set_t*));
         }
-        tables[table_ptr].dpus[tmp_ptr]=&dpu;
-        tables[table_ptr].first_buffer_index=
-        tmp_ptr++;
-    }
-    allocated_dpus+=ready_buffers;
-    ready_buffers=0;
+        uint32_t table_ptr=0,tmp_ptr=0;
+        DPU_FOREACH(set, dpu,dpu_id){
+            if(tables[table_ptr].nr_buffers==tmp_ptr){
+                table_ptr++;
+                tmp_ptr=0;
+            }
+            tables[table_ptr].dpus[tmp_ptr]=&dpu;
+            tables[table_ptr].first_buffer_index=
+            tmp_ptr++;
+        }
+        if(ready_buffers<=DPUS_PER_RANK){
+            allocated_dpus+=ready_buffers;
+            ready_buffers=0;
+        }
+        else{
+            allocated_dpus+=DPUS_PER_RANK;
+            ready_buffers-=DPUS_PER_RANK;
+        }
     }
     return;
 }
@@ -174,7 +183,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
     Result:
     This function updates ans with the elements of the rows that we have lookedup
 */
-void lookup(int32_t *ans, int32_t* input, uint64_t length, uint64_t nr_rows, uint64_t nr_cols){
+/*void lookup(int32_t *output, int32_t* input, uint64_t input_length){
     struct dpu_set_t set, dpu, dpu_rank;
 
     uint64_t offset=nr_cols*nr_rows*sizeof(uint64_t);
@@ -194,7 +203,7 @@ void lookup(int32_t *ans, int32_t* input, uint64_t length, uint64_t nr_rows, uin
 	    }
     }
     dpu_free(set);
-}
+}*/
 
 int main(){
 
