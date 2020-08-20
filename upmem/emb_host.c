@@ -57,6 +57,8 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
     if (table_id==0){
         buffers=(struct embedding_buffer**)malloc(NR_TABLES*sizeof(struct embedding_buffer*));
     }
+    tables[table_id].nr_rows=nr_rows;
+    tables[table_id].nr_cols=nr_cols;
 
     if( table_size <= MAX_CAPACITY){
         tables[table_id].nr_buffers=1;
