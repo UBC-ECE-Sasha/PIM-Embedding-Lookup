@@ -30,7 +30,7 @@ struct embedding_buffer{
 struct embedding_table{
     uint32_t first_buffer_index, last_buffer_index, nr_buffers;
     uint64_t nr_rows, nr_cols;
-    struct dpu_set_t **dpus;
+    struct embedding_buffer **buffers;
 };
 
 uint32_t total_buffers=0, arrays_len=NR_TABLES;
@@ -150,7 +150,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             free(buffers[i]->data);
 
         for (int i=0; i<NR_TABLES; i++){
-            tables[i].dpus=(struct dpu_set_t**)malloc(tables[i].nr_buffers*sizeof(struct dpu_set_t*));
+            tables[i].buffers=(struct embedding_buffer**)malloc(tables[i].nr_buffers*sizeof(struct embedding_buffer*));
         }
         uint32_t table_ptr=0,tmp_ptr=0;
         DPU_FOREACH(set, dpu,dpu_id){
@@ -158,9 +158,8 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
                 table_ptr++;
                 tmp_ptr=0;
             }
-            tables[table_ptr].dpus[tmp_ptr]=&dpu;
-            tables[table_ptr].first_buffer_index=
-            tmp_ptr++;
+            tables[table_ptr].buffers[tmp_ptr]=buffers[dpu_id];
+            tables[table_ptr].first_buffer_index=tmp_ptr++;
         }
         if(ready_buffers<=DPUS_PER_RANK){
             allocated_dpus+=ready_buffers;
@@ -185,8 +184,8 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
     Result:
     This function updates ans with the elements of the rows that we have lookedup
 */
-/*void lookup(int32_t *output, int32_t* input, uint64_t input_length){
-    struct dpu_set_t set, dpu, dpu_rank;
+void lookup(uint32_t* indices, uint32_t *offsets, uint32_t *indices_len, uint32_t offsets_len){
+    /*struct dpu_set_t set, dpu, dpu_rank;
 
     uint64_t offset=nr_cols*nr_rows*sizeof(uint64_t);
     uint64_t write_len=length*sizeof(uint64_t);
@@ -204,8 +203,8 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
 	            printf("ans[%d][%d] = %d\n", (int32_t)input[i], j, ans[i*nr_cols+j]);
 	    }
     }
-    dpu_free(set);
-}*/
+    dpu_free(set);*/
+}
 
 int main(){
 
