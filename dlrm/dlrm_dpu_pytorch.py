@@ -312,7 +312,7 @@ class DLRM_Net(nn.Module):
         offsets_len_pointer=(c_uint32*(len(offsets_len)))(*offsets_len)
         my_functions.lookup(indices_pointer,offsets_pointer,indices_len_pointer,offsets_len_pointer)
 
-        for k, sparse_index_group_batch in enumerate(lS_i):
+        """ for k, sparse_index_group_batch in enumerate(lS_i):
             sparse_offset_group_batch = lS_o[k]
 
             # embedding lookup
@@ -328,7 +328,7 @@ class DLRM_Net(nn.Module):
             ly.append(V)
 
         #print(ly)
-        return ly
+        return ly """
 
     #export embedding tables and make them ready for MRAM
     def export_emb(self, emb_l):

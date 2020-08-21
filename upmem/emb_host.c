@@ -34,10 +34,10 @@ struct embedding_table{
 };
 
 uint32_t total_buffers=0, arrays_len=NR_TABLES;
-uint32_t ready_buffers=0, allocated_dpus=0;
-struct dpu_set_t *table_dpus[NR_TABLES];
+uint32_t ready_buffers=0, allocated_dpus=0, allocated_ranks=0;
 struct embedding_buffer **buffers;
 struct embedding_table tables[NR_TABLES];
+struct dpu_set_t *dpu_ranks;
 /*
     Params:
     0. table_id: embedding table number.
@@ -169,6 +169,8 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             allocated_dpus+=DPUS_PER_RANK;
             ready_buffers-=DPUS_PER_RANK;
         }
+        dpu_ranks[allocated_ranks]=set;
+        allocated_ranks++;
     }
     return;
 }
@@ -185,25 +187,43 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
     This function updates ans with the elements of the rows that we have lookedup
 */
 void lookup(uint32_t* indices, uint32_t *offsets, uint32_t *indices_len, uint32_t offsets_len){
-    /*struct dpu_set_t set, dpu, dpu_rank;
-
-    uint64_t offset=nr_cols*nr_rows*sizeof(uint64_t);
-    uint64_t write_len=length*sizeof(uint64_t);
-    uint64_t read_len=length*nr_cols*sizeof(uint64_t);
-
-    DPU_ASSERT(dpu_copy_to(set, "index_len_input", 0, (const uint8_t *)&length, sizeof(length)));
-    DPU_ASSERT(dpu_copy_to(set, DPU_MRAM_HEAP_POINTER_NAME, nr_cols*nr_rows*sizeof(uint64_t), (const uint8_t *)input, write_len));
-
-    dpu_launch(set, DPU_SYNCHRONOUS);
-
-    DPU_FOREACH(set, dpu) {
-        DPU_ASSERT(dpu_copy_from(dpu, DPU_MRAM_HEAP_POINTER_NAME, offset , (int32_t*)ans, read_len));
-        for (int i=0; i<length; i++){
-            for (int j=0; j<nr_cols; j++)
-	            printf("ans[%d][%d] = %d\n", (int32_t)input[i], j, ans[i*nr_cols+j]);
-	    }
+    uint64_t max_len=0;
+    for (int i=0; i<NR_TABLES; i++){
+        for (int i=0; j<tables[i].nr_buffers; j++){
+            DPU_ASSERT(dpu_prepare_xfer(*(tables[i].buffers[j]), &indices[indices_len[i]]);
+        }
+        if(indices_len[i]>max_len)
+            max_len=indices_len[i];
     }
-    dpu_free(set);*/
+    for (int k=0; k<allocated_ranks; k++)
+        DPU_ASSERT(dpu_push_xfer(dpu_ranks[k], DPU_XFER_TO_DPU, "input_indices", 0, ALIGN(max_len, 8), DPU_XFER_DEFAULT))
+
+    for(int i=0; i<NR_TABLES; i++){
+        for (int j=0; j<tables[i].nr_buffers; j++)
+            DPU_ASSERT(dpu_prepare_xfer(*(tables[i].buffers[j]), &offsets[offsets_len[i]]))
+        if(indices_len[i]>max_len)
+            max_len=indices_len[i];
+    }
+    for (int k=0; k<allocated_ranks; k++)
+        DPU_ASSERT(dpu_push_xfer(dpu_ranks[k], DPU_XFER_TO_DPU, "input_offsets", 0, ALIGN(max_len, 8), DPU_XFER_DEFAULT))
+
+    for (int i=0; i<NR_TABLES; i++){
+        for (int i=0; j<tables[i].nr_buffers; j++)
+            DPU_ASSERT(dpu_prepare_xfer(*(tables[i].buffers[j]), &indices_len[i]);
+    }
+    for (int k=0; k<allocated_ranks; k++)
+        DPU_ASSERT(dpu_push_xfer(dpu_ranks[k], DPU_XFER_TO_DPU, "input_indices_len", 0, sizeof(uint32_t), DPU_XFER_DEFAULT))
+
+    for (int i=0; i<NR_TABLES; i++){
+        for (int i=0; j<tables[i].nr_buffers; j++)
+            DPU_ASSERT(dpu_prepare_xfer(*(tables[i].buffers[j]), &offsets_len[i]);
+    }
+    for (int k=0; k<allocated_ranks; k++)
+        DPU_ASSERT(dpu_push_xfer(dpu_ranks[k], DPU_XFER_TO_DPU, "input_offsets_len", 0, sizeof(uint32_t), DPU_XFER_DEFAULT))
+
+    for (int i=0; i<allocated_ranks; i++)
+        DPU_ASSERT(dpu_launch(dpu_ranks[i], DPU_ASYNCHRONOUS));
+
 }
 
 int main(){
