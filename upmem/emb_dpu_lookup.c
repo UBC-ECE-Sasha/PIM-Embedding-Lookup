@@ -11,7 +11,6 @@ __mram_noinit uint64_t col_size_input;
 __mram_noinit uint64_t index_len_input;
 
 __mram_noinit int32_t data[8];
->>>>>>> d13bf89... working on granularization
 
 __mram_ptr __dma_aligned uint8_t *mram_offset;
 
