@@ -116,7 +116,7 @@ class CriteoDataset(Dataset):
             )
 
         # get a number of samples per day
-        total_file = "/Users/abbas/Desktop/Sasha/dlrm/tests/train_day_count.npz"
+        total_file = "raw_data/train_day_count-modified.npz"
         with np.load(total_file) as data:
             total_per_file = data["total_per_file"]
         # compute offsets per file

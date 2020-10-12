@@ -303,14 +303,14 @@ class DLRM_Net(nn.Module):
             offsets_len.append(len(lS_o[k]))
         #print(offsets)
 
-        my_functions.lookup.argtypes = POINTER(c_uint32), POINTER(c_uint32), POINTER(c_uint32), POINTER(c_uint32)
-        my_functions.lookup.restype= None
+        #my_functions.lookup.argtypes = POINTER(c_uint32), POINTER(c_uint32), POINTER(c_uint32), POINTER(c_uint32)
+        #my_functions.lookup.restype= None
 
         indices_pointer=(c_uint32*(len(indices)))(*indices)
         offsets_pointer=(c_uint32*(len(offsets)))(*offsets)
         indices_len_pointer=(c_uint32*(len(indices_len)))(*indices_len)
         offsets_len_pointer=(c_uint32*(len(offsets_len)))(*offsets_len)
-        my_functions.lookup(indices_pointer,offsets_pointer,indices_len_pointer,offsets_len_pointer)
+        #my_functions.lookup(indices_pointer,offsets_pointer,indices_len_pointer,offsets_len_pointer)
 
         """ for k, sparse_index_group_batch in enumerate(lS_i):
             sparse_offset_group_batch = lS_o[k]
@@ -327,8 +327,9 @@ class DLRM_Net(nn.Module):
             #print(str(sparse_offset_group_batch))
             ly.append(V)
 
-        #print(ly)
-        return ly """
+        #print(ly)"""
+        exit()
+        return ly
 
     #export embedding tables and make them ready for MRAM
     def export_emb(self, emb_l):
@@ -927,7 +928,7 @@ if __name__ == "__main__":
             ld_model = torch.load(args.load_model, map_location=torch.device('cpu'))
         dlrm.load_state_dict(ld_model["state_dict"])
         print("load export running")
-        #dlrm.export_emb(dlrm.emb_l)
+        dlrm.export_emb(dlrm.emb_l)
 
         ld_j = ld_model["iter"]
         ld_k = ld_model["epoch"]
