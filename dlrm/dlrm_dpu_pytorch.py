@@ -96,7 +96,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 #dpu
 from ctypes import *
 
-so_file="../upmem/emblib.so"
+so_file="/home/upmem0016/niloo/PIM-Embedding-Lookup/upmem/emblib.so"
 my_functions=CDLL(so_file)
 #dpu
 
@@ -271,8 +271,9 @@ class DLRM_Net(nn.Module):
                 self.emb_l = self.create_emb(m_spa, ln_emb)
             self.bot_l = self.create_mlp(ln_bot, sigmoid_bot)
             self.top_l = self.create_mlp(ln_top, sigmoid_top)
-            self.export_emb(self.emb_l)
-            exit()
+            #print("make export running")
+            #self.export_emb(self.emb_l)
+    
 
     def apply_mlp(self, x, layers):
         # approach 1: use ModuleList
@@ -291,7 +292,27 @@ class DLRM_Net(nn.Module):
         # 3. for a list of embedding tables there is a list of batched lookups
 
         ly = []
-        for k, sparse_index_group_batch in enumerate(lS_i):
+        indices=[]
+        offsets=[]
+        indices_len=[]
+        offsets_len=[]
+        for k,index_list in enumerate(lS_i):
+            indices.extend(list(index_list.tolist()))
+            offsets.extend(list(lS_o[k].tolist()))
+            indices_len.append(len(index_list))
+            offsets_len.append(len(lS_o[k]))
+        #print(offsets)
+
+        #my_functions.lookup.argtypes = POINTER(c_uint32), POINTER(c_uint32), POINTER(c_uint32), POINTER(c_uint32)
+        #my_functions.lookup.restype= None
+
+        indices_pointer=(c_uint32*(len(indices)))(*indices)
+        offsets_pointer=(c_uint32*(len(offsets)))(*offsets)
+        indices_len_pointer=(c_uint32*(len(indices_len)))(*indices_len)
+        offsets_len_pointer=(c_uint32*(len(offsets_len)))(*offsets_len)
+        #my_functions.lookup(indices_pointer,offsets_pointer,indices_len_pointer,offsets_len_pointer)
+
+        """ for k, sparse_index_group_batch in enumerate(lS_i):
             sparse_offset_group_batch = lS_o[k]
 
             # embedding lookup
@@ -300,16 +321,20 @@ class DLRM_Net(nn.Module):
             # happening vertically across 0 axis, resulting in a row vector
             E = emb_l[k]
             V = E(sparse_index_group_batch, sparse_offset_group_batch)
-
+            #print("V:"+str(len(V)))
+            #print(str(k))
+            #print(len(sparse_index_group_batch))
+            #print(str(sparse_offset_group_batch))
             ly.append(V)
 
-        # print(ly)
+        #print(ly)"""
+        exit()
         return ly
 
     #export embedding tables and make them ready for MRAM
     def export_emb(self, emb_l):
 
-        my_functions.populate_mram.argtypes = c_uint32, c_uint32, c_uint32, POINTER(c_int32)
+        my_functions.populate_mram.argtypes = c_uint32, c_uint64, c_uint64, POINTER(c_int32)
         my_functions.populate_mram.restype= None
 
         for k in range(0, len(emb_l)):
@@ -322,19 +347,11 @@ class DLRM_Net(nn.Module):
             for i in range(0, nr_rows):
                 for j in range(0, nr_cols):
                     emb_data.append(int(round(tmp_emb[i][j]*(10**9))))
-            print(str(k)+"th table size is:"+str(nr_rows*nr_cols))
             data_pointer=(c_int32*(len(emb_data)))(*emb_data)
             my_functions.populate_mram(k,nr_rows,nr_cols,data_pointer)
 
-        """ print("nr_rows=")
-        print(nr_rows)
-        print("-------------------------------")
-        print("nr_cols=")
-        print(nr_cols)
-        print("------------------------------------------------")
-        print("emb_data")
-        print(emb_data) """
-
+        #my_functions.toy_function()
+            
         return
 
     def interact_features(self, x, ly):
@@ -910,9 +927,8 @@ if __name__ == "__main__":
             # when targeting inference on CPU
             ld_model = torch.load(args.load_model, map_location=torch.device('cpu'))
         dlrm.load_state_dict(ld_model["state_dict"])
-
-        dlrm.export_emb(self, emb_l)
-        exit()
+        print("load export running")
+        dlrm.export_emb(dlrm.emb_l)
 
         ld_j = ld_model["iter"]
         ld_k = ld_model["epoch"]
