@@ -102,6 +102,8 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
     }
     printf("done with %dth table\n",table_id);
 
+    // Done with analyzing all tables or nr ready_buffers enough for a rank so
+    // allocate a rank and copy embedding data.
     if(ready_buffers>=DPUS_PER_RANK || table_id==NR_TABLES-1){
         struct dpu_set_t set, dpu, dpu_rank;
         printf("allocating %d dpus and %d dpus allocated before.\n",ready_buffers,done_dpus);
@@ -109,6 +111,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             DPU_ASSERT(dpu_alloc(ready_buffers, NULL, &set));
         else
             DPU_ASSERT(dpu_alloc(DPUS_PER_RANK, NULL, &set));
+            //TODO: make sure works correctly under this condition.
         DPU_ASSERT(dpu_load(set, DPU_BINARY, NULL));
 
         uint32_t len;
@@ -129,6 +132,8 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
 
             buffers[done_dpus+dpu_id]->dpu=&dpu;
         }
+
+        // This section is just for testing, see if correct values are in DPU
         int32_t ans[4];
         DPU_FOREACH(set, dpu, dpu_id){
             dpu_launch(dpu, DPU_SYNCHRONOUS);
@@ -148,6 +153,8 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
         for (int i=0; i<ready_buffers; i++)
             free(buffers[i]->data);
 
+
+        // Assign dpus allocated to buffers to their embedding_tables.
         for (int i=0; i<NR_TABLES; i++){
             tables[i].buffers=(struct embedding_buffer**)malloc(tables[i].nr_buffers*sizeof(struct embedding_buffer*));
         }
@@ -159,6 +166,8 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             }
             tables[table_ptr].buffers[tmp_ptr]=buffers[dpu_id];
         }
+
+        // done with a set of dpus, make changes to their counters to move to next set.
         if(ready_buffers<=DPUS_PER_RANK){
             done_dpus+=ready_buffers;
             ready_buffers=0;
