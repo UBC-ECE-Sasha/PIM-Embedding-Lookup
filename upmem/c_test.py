@@ -1,7 +1,7 @@
 from ctypes import *
 import numpy
 
-so_file="emblib.so"
+so_file="/home/upmem0016/niloo/PIM-Embedding-Lookup/upmem/emblib.so"
 
 my_functions=CDLL(so_file)
 
