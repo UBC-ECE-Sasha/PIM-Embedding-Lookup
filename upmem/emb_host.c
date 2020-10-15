@@ -15,7 +15,7 @@
 #endif
 
 #define MAX_CAPACITY MEGABYTE(14) //Must be a multiply of 2
-#define NR_TABLES 26
+#define NR_TABLES 8
 #define DPUS_PER_RANK 64
 
 
@@ -134,7 +134,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
         }
 
         // This section is just for testing, see if correct values are in DPU
-        int32_t ans[4];
+        /* int32_t ans[4];
         DPU_FOREACH(set, dpu, dpu_id){
             dpu_launch(dpu, DPU_SYNCHRONOUS);
             first_row=buffers[done_dpus+dpu_id]->first_row;
@@ -149,7 +149,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             //DPU_ASSERT(dpu_log_read(dpu, stdout));
             //printf("log printed");
         }
-
+ */
         for (int i=0; i<ready_buffers; i++)
             free(buffers[i]->data);
 
