@@ -150,3 +150,5 @@ dlrm/raw_data/
 # pretrained models
 dlrm/trainedModels/
 
+# idea
+.idea/
