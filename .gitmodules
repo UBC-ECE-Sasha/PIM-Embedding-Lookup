@@ -1,0 +1,3 @@
+[submodule "upmem/PIM-common"]
+	path = upmem/PIM-common
+	url = https://github.com/UBC-ECE-Sasha/PIM-common.git
