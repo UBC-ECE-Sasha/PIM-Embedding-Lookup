@@ -7,6 +7,7 @@
 #include <dpu_log.h>
 #include <stdlib.h>
 #include <math.h>
+#include <unistd.h>
 
 #include "common/include/common.h"
 
@@ -15,7 +16,7 @@
 #endif
 
 #define MAX_CAPACITY MEGABYTE(14) //Must be a multiply of 2
-#define NR_TABLES 8
+#define NR_TABLES 26
 #define DPUS_PER_RANK 64
 
 
@@ -82,7 +83,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             buffers[total_buffers+j]->last_row=MIN(nr_rows-1, ((j+1)*MAX_CAPACITY)/nr_cols-1);
             buffers=(struct embedding_buffer**)realloc(buffers, buff_arr_len*(sizeof(struct embedding_buffer*)));
             buffers[total_buffers+j]->table_id=table_id;
-            buffers[total_buffers]->nr_cols=nr_cols;
+            buffers[total_buffers+j]->nr_cols=nr_cols;
         }
     tables[table_id].first_dpu_id=total_buffers;
     tables[table_id].last_dpu_id=total_buffers+tables[table_id].nr_buffers;
@@ -126,7 +127,6 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             DPU_ASSERT(dpu_copy_to(dpu, "nr_cols_input", 0, (const uint64_t *)&(buffers[done_dpus+dpu_id]->nr_cols), sizeof(uint64_t)));
             DPU_ASSERT(dpu_copy_to(dpu, "first_row_input", 0, (const uint64_t *)&first_row, sizeof(uint64_t)));
             DPU_ASSERT(dpu_copy_to(dpu, "last_row_input", 0, (const uint64_t *)&last_row, sizeof(uint64_t)));
-            printf("params copied\n");
             DPU_ASSERT(dpu_copy_to(dpu, "emb_data" , 0, (const int32_t *)buffers[done_dpus+dpu_id]->data, ALIGN(len*sizeof(int32_t),8)));
             printf("copied %dth buffer to dpu\n",dpu_id);
 
@@ -134,7 +134,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
         }
 
         // This section is just for testing, see if correct values are in DPU
-        /* int32_t ans[4];
+        int32_t ans[4];
         DPU_FOREACH(set, dpu, dpu_id){
             dpu_launch(dpu, DPU_SYNCHRONOUS);
             first_row=buffers[done_dpus+dpu_id]->first_row;
@@ -146,10 +146,9 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             uint32_t offset= ALIGN((last_row-first_row+1)*buffers[done_dpus+dpu_id]->nr_cols*sizeof(int32_t),8);
             DPU_ASSERT(dpu_copy_from(dpu, "ans_buffer", 0 , (int32_t*)ans, 2*sizeof(int32_t)));
             printf("%d: %d, %d\n",dpu_id,ans[0], ans[1]);
-            //DPU_ASSERT(dpu_log_read(dpu, stdout));
+            DPU_ASSERT(dpu_log_read(dpu, stdout));
             //printf("log printed");
         }
- */
 
         for (int i=0; i<ready_buffers; i++)
             free(buffers[i]->data);

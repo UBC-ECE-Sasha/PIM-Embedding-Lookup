@@ -157,3 +157,6 @@ upmem/start-docker.sh
 
 # idea
 .idea/
+
+# Niloo local files
+upmem/local_files
