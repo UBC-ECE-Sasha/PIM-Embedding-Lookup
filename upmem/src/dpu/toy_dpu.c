@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "common.h"
+#include "common/include/common.h"
 
 __mram_noinit uint64_t nr_cols_input;
 __mram_noinit uint64_t first_row_input;

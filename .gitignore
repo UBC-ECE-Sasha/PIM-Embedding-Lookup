@@ -155,3 +155,5 @@ dlrm/trainedModels/
 upmem/Dockerfile
 upmem/start-docker.sh
 
+# idea
+.idea/

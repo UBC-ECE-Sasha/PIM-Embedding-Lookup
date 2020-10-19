@@ -8,10 +8,10 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "common.h"
+#include "common/include/common.h"
 
 #ifndef DPU_BINARY
-#define DPU_BINARY "../upmem/toy_dpu" //Relative path regarding the PyTorch code
+#define DPU_BINARY "../upmem/emb_dpu_lookup" // Relative path regarding the PyTorch code
 #endif
 
 #define MAX_CAPACITY MEGABYTE(14) //Must be a multiply of 2
@@ -150,21 +150,27 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             //printf("log printed");
         }
  */
+
         for (int i=0; i<ready_buffers; i++)
             free(buffers[i]->data);
-
 
         // Assign dpus allocated to buffers to their embedding_tables.
         for (int i=0; i<NR_TABLES; i++){
             tables[i].buffers=(struct embedding_buffer**)malloc(tables[i].nr_buffers*sizeof(struct embedding_buffer*));
         }
+
+        // dpu_launch(set, DPU_SYNCHRONOUS);
+
         uint32_t table_ptr=0,tmp_ptr=0;
-        DPU_FOREACH(set, dpu,dpu_id){
+        DPU_FOREACH(set, dpu, dpu_id){
             if(tables[table_ptr].nr_buffers==tmp_ptr){
                 table_ptr++;
                 tmp_ptr=0;
             }
             tables[table_ptr].buffers[tmp_ptr]=buffers[dpu_id];
+
+            // printf("------DPU %d Logs------\n", dpu_id);
+            // DPU_ASSERT(dpu_log_read(dpu, stdout));
         }
 
         // done with a set of dpus, make changes to their counters to move to next set.
@@ -176,7 +182,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             done_dpus+=DPUS_PER_RANK;
             ready_buffers-=DPUS_PER_RANK;
         }
-        dpu_ranks[allocated_ranks]=set;
+        // dpu_ranks[allocated_ranks]=set; // NEVER ALLOCATED, SEGFAULT
         allocated_ranks++;
     }
     return;
