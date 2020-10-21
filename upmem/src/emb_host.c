@@ -134,7 +134,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
         }
 
         // This section is just for testing, see if correct values are in DPU
-        int32_t ans[4];
+        /*int32_t ans[4];
         DPU_FOREACH(set, dpu, dpu_id){
             dpu_launch(dpu, DPU_SYNCHRONOUS);
             first_row=buffers[done_dpus+dpu_id]->first_row;
@@ -144,13 +144,18 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             buffers[dpu_id]->data[(last_row-first_row+1)*buffers[done_dpus+dpu_id]->nr_cols-2],
             buffers[dpu_id]->data[(last_row-first_row+1)*buffers[done_dpus+dpu_id]->nr_cols-1],dpu_id);
             uint32_t offset= ALIGN((last_row-first_row+1)*buffers[done_dpus+dpu_id]->nr_cols*sizeof(int32_t),8);
+            printf("copying from dpu\n");
             DPU_ASSERT(dpu_copy_from(dpu, "ans_buffer", 0 , (int32_t*)ans, 2*sizeof(int32_t)));
+            printf("copied from dpu\n");
             printf("%d: %d, %d\n",dpu_id,ans[0], ans[1]);
+            printf("reading log\n");
             DPU_ASSERT(dpu_log_read(dpu, stdout));
+            printf("log read for dpu %dth\n",dpu_id);
+            printf("------------------------------------------\n");
             //printf("log printed");
-        }
+        }*/
 
-        for (int i=0; i<ready_buffers; i++)
+        for (int i=done_dpus; i<ready_buffers; i++)
             free(buffers[i]->data);
 
         // Assign dpus allocated to buffers to their embedding_tables.
