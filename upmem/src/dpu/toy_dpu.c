@@ -9,9 +9,12 @@
 __mram_noinit uint64_t nr_cols_input;
 __mram_noinit uint64_t first_row_input;
 __mram_noinit uint64_t last_row_input;
-
+__mram_noinit uint64_t input_indices_len;
+__mram_noinit uint64_t input_offsets_len;
 
 __mram_noinit int32_t emb_data[MEGABYTE(14)];
+__mram_noinit int32_t input_indices[4096];
+__mram_noinit int32_t input_offsets[4096];
 __mram_noinit int ans_buffer[MEGABYTE(1)];
 
 int main() {
