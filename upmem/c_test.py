@@ -32,13 +32,14 @@ def populate():
 
 
 def lookup():
-    my_functions.lookup.argtypes = POINTER(c_double), POINTER(
-        c_uint64), c_uint64, c_uint64, c_uint64
+    my_functions.lookup.argtypes = POINTER(c_uint32), POINTER(c_uint32), POINTER(c_uint64), POINTER(c_uint64), POINTER(c_uint32)
     my_functions.lookup.restype = None
-    tmp = [[0.0] * 20]
-    ans = (c_double * 20)(*tmp)
-    q = (c_uint64 * 4)(0, 1, 2, 3)
-    my_functions.lookup(ans, q, 4, 4, 5)
+    indices=(c_uint32 * 16)(1,3,1,3,1,3,1,3,1,3,1,3,1,3,1,3)
+    offsets=(c_uint32 * 8)(0,0,0,0,0,0,0,0)
+    indices_len=(c_uint64 * 8)(2,2,2,2,2,2,2,2)
+    offsets_len=(c_uint64 * 8)(1,1,1,1,1,1,1,1)
+    ans=(c_uint32 *20)()
+    my_functions.lookup(indices, offsets, indices_len, offsets_len,ans)
 
 
 if __name__ == "__main__":
@@ -47,6 +48,4 @@ if __name__ == "__main__":
     my_functions = CDLL(os.path.abspath(so_file))
 
     populate()
-
-    # TODO
-    # lookup()
+    lookup()
