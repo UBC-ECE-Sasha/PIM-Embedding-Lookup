@@ -183,7 +183,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             done_dpus += DPUS_PER_RANK;
             ready_buffers -= DPUS_PER_RANK;
         }
-        dpu_ranks[allocated_ranks] = &set;
+        dpu_ranks[allocated_ranks] = set;
         allocated_ranks++;
     }
     return;
