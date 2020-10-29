@@ -40,6 +40,9 @@ COMMON_CFLAGS       = -lm --std=c11 -fPIC # -Wall -Wextra -MMD -Werror
 SHARED_CFLAGS       = -shared -Wl,-soname,$(PROJECT)
 DPU_OPTS            = `dpu-pkg-config --cflags --libs dpu`
 
+# Tools
+CLANG_FORMAT        = clang-format
+
 # Debug/Release mode
 ifneq ($(DEBUG),)
   COMMON_CFLAGS     += -g -DDEBUG
@@ -76,6 +79,7 @@ SHOW_CC             := $(SHOW_COMMAND) "[ $(CC) ]"
 SHOW_CLEAN          := $(SHOW_COMMAND) "[ CLEAN ]"
 SHOW_GEN            := $(SHOW_COMMAND) "[ GEN ]"
 SHOW_MAKE           := $(SHOW_COMMAND) "[ MAKE ]"
+SHOW_FORMAT         := $(SHOW_COMMAND) "[ FORMAT ]"
 
 ##############################################################################################
 # Default target and help message
@@ -134,3 +138,13 @@ clean:
 	$(SILENCE)rm -rf $(BUILD_DIR)
 
 .PHONY: clean
+
+##############################################################################################
+# Format
+##############################################################################################
+format:
+	$(SHOW_FORMAT) $@
+	$(SILENCE)$(CLANG_FORMAT) -i src/*.c # src/*.h include/*.h
+	$(SILENCE)$(MAKE) format -C src/dpu
+
+.PHONY: format
