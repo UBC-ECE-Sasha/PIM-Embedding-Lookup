@@ -35,6 +35,9 @@ DEPS                = $(APP_OBJS:.o=.d) \
 CC                  = dpu-upmem-dpurte-clang
 COMMON_CFLAGS       = --std=c11 -flto -g -Wall -Wextra -MMD -Werror
 
+# Tools
+CLANG_FORMAT        = clang-format
+
 # Debug/Release mode
 ifneq ($(DEBUG),)
   COMMON_CFLAGS     += -g -DDEBUG
@@ -65,6 +68,7 @@ SHOW_COMMAND        := @printf "%-15s%s\n"
 SHOW_CC             := $(SHOW_COMMAND) "[ $(CC) ]"
 SHOW_CLEAN          := $(SHOW_COMMAND) "[ CLEAN ]"
 SHOW_GEN            := $(SHOW_COMMAND) "[ GEN ]"
+SHOW_FORMAT         := $(SHOW_COMMAND) "[ FORMAT ]"
 
 ##############################################################################################
 # Default target and help message
@@ -88,3 +92,12 @@ $(BUILD_DIR)/%.o: %.c
 	$(SHOW_CC) $@
 	$(SILENCE)mkdir -p $(dir $@)
 	$(SILENCE)$(CC) $(CFLAGS) $(INC) -c $< -o $@ $(DPU_OPTS)
+
+##############################################################################################
+# Format
+##############################################################################################
+format:
+	$(SHOW_FORMAT) $@
+	$(SILENCE)$(CLANG_FORMAT) -i *.c # *.h
+
+.PHONY: format

@@ -1,18 +1,19 @@
-// to compile the code: gcc -O0 -g3 --std=c99 -o emb_host emb_host.c -g `dpu-pkg-config --cflags --libs dpu`
-// to build a shared library: gcc -shared -Wl,-soname,emb_host -o emblib.so -fPIC emb_host.c `dpu-pkg-config --cflags --libs dpu`
-#include <dpu.h>
-#include <assert.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <dpu_log.h>
-#include <stdlib.h>
-#include <math.h>
-#include <unistd.h>
-
+// to compile the code: gcc -O0 -g3 --std=c99 -o emb_host emb_host.c -g `dpu-pkg-config --cflags
+// --libs dpu` to build a shared library: gcc -shared -Wl,-soname,emb_host -o emblib.so -fPIC
+// emb_host.c `dpu-pkg-config --cflags --libs dpu`
 #include "common/include/common.h"
 
+#include <assert.h>
+#include <dpu.h>
+#include <dpu_log.h>
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
 #ifndef DPU_BINARY
-#define DPU_BINARY "../upmem/emb_dpu_lookup" // Relative path regarding the PyTorch code
+#    define DPU_BINARY "../upmem/emb_dpu_lookup" // Relative path regarding the PyTorch code
 #endif
 
 #define MAX_CAPACITY MEGABYTE(14) //Must be a multiply of 2
@@ -20,15 +21,14 @@
 #define DPUS_PER_RANK 64
 #define AVAILABLE_RANKS 10
 
-
-struct embedding_buffer{
+struct embedding_buffer {
     int32_t *data;
     uint64_t first_row, last_row;
     uint64_t nr_rows;
     uint32_t table_id;
 };
 
-struct embedding_table{
+struct embedding_table {
     uint32_t first_dpu_id, last_dpu_id, nr_buffers;
     uint64_t nr_rows;
     struct embedding_buffer **buffers;
@@ -100,18 +100,18 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
         ready_buffers++;
         total_buffers++;
     }
-    printf("done with %dth table\n",table_id);
+    printf("done with %dth table\n", table_id);
 
     // Done with analyzing all tables or nr ready_buffers enough for a rank so
     // allocate a rank and copy embedding data.
-    if(ready_buffers>=DPUS_PER_RANK || table_id==NR_TABLES-1){
+    if (ready_buffers >= DPUS_PER_RANK || table_id == NR_TABLES - 1) {
         struct dpu_set_t set, dpu, dpu_rank;
-        printf("allocating %d dpus and %d dpus allocated before.\n",ready_buffers,done_dpus);
-        if(ready_buffers<= DPUS_PER_RANK)
+        printf("allocating %d dpus and %d dpus allocated before.\n", ready_buffers, done_dpus);
+        if (ready_buffers <= DPUS_PER_RANK)
             DPU_ASSERT(dpu_alloc(ready_buffers, NULL, &set));
         else
             DPU_ASSERT(dpu_alloc(DPUS_PER_RANK, NULL, &set));
-            //TODO: make sure works correctly under this condition.
+        // TODO: make sure works correctly under this condition.
         DPU_ASSERT(dpu_load(set, DPU_BINARY, NULL));
 
         uint32_t len;
@@ -135,11 +135,13 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             dpu_launch(dpu, DPU_SYNCHRONOUS);
             first_row=buffers[done_dpus+dpu_id]->first_row;
             last_row=buffers[done_dpus+dpu_id]->last_row;
-            printf("In host last_row:%d, first row:%d & nr_cols:%d\n",last_row,first_row,buffers[done_dpus+dpu_id]->nr_cols);
-            printf("first: %d, 2nd: %d, -1: %d, last: %dfor %d buffer\n",buffers[dpu_id]->data[0],buffers[dpu_id]->data[1],
+            printf("In host last_row:%d, first row:%d &
+        nr_cols:%d\n",last_row,first_row,buffers[done_dpus+dpu_id]->nr_cols); printf("first: %d,
+        2nd: %d, -1: %d, last: %dfor %d buffer\n",buffers[dpu_id]->data[0],buffers[dpu_id]->data[1],
             buffers[dpu_id]->data[(last_row-first_row+1)*buffers[done_dpus+dpu_id]->nr_cols-2],
             buffers[dpu_id]->data[(last_row-first_row+1)*buffers[done_dpus+dpu_id]->nr_cols-1],dpu_id);
-            uint32_t offset= ALIGN((last_row-first_row+1)*buffers[done_dpus+dpu_id]->nr_cols*sizeof(int32_t),8);
+            uint32_t offset=
+        ALIGN((last_row-first_row+1)*buffers[done_dpus+dpu_id]->nr_cols*sizeof(int32_t),8);
             printf("copying from dpu\n");
             DPU_ASSERT(dpu_copy_from(dpu, "ans_buffer", 0 , (int32_t*)ans, 2*sizeof(int32_t)));
             printf("copied from dpu\n");
@@ -151,7 +153,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
             //printf("log printed");
         }*/
 
-        for (int i=done_dpus; i<ready_buffers; i++)
+        for (int i = done_dpus; i < ready_buffers; i++)
             free(buffers[i]->data);
 
         // Assign dpus allocated to buffers to their embedding_tables.
@@ -165,7 +167,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
         DPU_FOREACH(set, dpu, dpu_id){
             if(tables[table_ptr]->nr_buffers==tmp_ptr){
                 table_ptr++;
-                tmp_ptr=0;
+                tmp_ptr = 0;
             }
             tables[table_ptr]->buffers[tmp_ptr]=buffers[dpu_id];
 
@@ -174,15 +176,14 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, uint64_t nr_cols, int32_
         }
 
         // done with a set of dpus, make changes to their counters to move to next set.
-        if(ready_buffers<=DPUS_PER_RANK){
-            done_dpus+=ready_buffers;
-            ready_buffers=0;
+        if (ready_buffers <= DPUS_PER_RANK) {
+            done_dpus += ready_buffers;
+            ready_buffers = 0;
+        } else {
+            done_dpus += DPUS_PER_RANK;
+            ready_buffers -= DPUS_PER_RANK;
         }
-        else{
-            done_dpus+=DPUS_PER_RANK;
-            ready_buffers-=DPUS_PER_RANK;
-        }
-        dpu_ranks[allocated_ranks]=set;
+        dpu_ranks[allocated_ranks] = &set;
         allocated_ranks++;
     }
     return;
@@ -268,11 +269,11 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
         }
     }
     return 0;
-
 }
 
-int main(){
+int
+main() {
 
-    //int32_t data[]={1,2,3,4,5,6,7,2,4,6,8,10,12,14,3,6,9,12,15,18,21,4,8,12,16,20,24,28};
-    //populate_mram(0,4,7, data);
+    // int32_t data[]={1,2,3,4,5,6,7,2,4,6,8,10,12,14,3,6,9,12,15,18,21,4,8,12,16,20,24,28};
+    // populate_mram(0,4,7, data);
 }
