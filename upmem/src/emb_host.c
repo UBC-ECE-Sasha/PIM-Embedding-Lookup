@@ -16,6 +16,7 @@
 #    define DPU_BINARY "../upmem/emb_dpu_lookup" // Relative path regarding the PyTorch code
 #endif
 
+#define MAX_ENC_BUFFER_SIZE MEGABYTE(MAX_ENC_BUFFER_MB)
 #define MAX_CAPACITY MEGABYTE(14) //Must be a multiply of 2
 #define NR_TABLES 8
 #define DPUS_PER_RANK 64

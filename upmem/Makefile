@@ -8,6 +8,7 @@ NR_DPUS             ?= 32
 NR_TASKLETS         ?= 1
 COUNTER_CONFIG      ?= "COUNT_CYCLES"
 SHOW_DPU_LOGS       ?= 1
+MAX_ENC_BUFFER_MB   ?= 1
 
 # Version information
 VERSION             = 0.0.0
@@ -59,6 +60,7 @@ CFLAGS              += $(COMMON_CFLAGS) \
                        -DCOUNTER_CONFIG=$(COUNTER_CONFIG) \
                        -DHOST=1 \
                        -DDPU_BINARY=\"dpu/$(EXE_DPU)\" \
+                       -DMAX_ENC_BUFFER_MB="$(MAX_ENC_BUFFER_MB)" \
                        -D_POSIX_C_SOURCE=199309L # For clock_gettime
 
 # define SHOW_DPU_LOGS in the source if we want DPU logs
