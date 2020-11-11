@@ -24,20 +24,20 @@ def parse():
 
 
 def populate():
-    my_functions.populate_mram.argtypes = c_uint32, c_uint64, c_uint64, POINTER(c_int32)
+    my_functions.populate_mram.argtypes = c_uint32, c_uint64, POINTER(c_int32)
     my_functions.populate_mram.restype = None
     data_ptr = (c_int32 * 20)(1, 2, 3, 4, 5, 2, 4, 6, 8, 10, 3, 6, 9, 12, 15, 4, 8, 12, 16, 20)
     for i in range (0, num_dpu):
-        my_functions.populate_mram(i, 4, 5, data_ptr)
+        my_functions.populate_mram(i, 4, data_ptr)
 
 
 def lookup():
     my_functions.lookup.argtypes = POINTER(c_uint32), POINTER(c_uint32), POINTER(c_uint64), POINTER(c_uint64), POINTER(c_uint32)
     my_functions.lookup.restype = None
-    indices=(c_uint32 * 16)(1,3,1,3,1,3,1,3,1,3,1,3,1,3,1,3)
-    offsets=(c_uint32 * 8)(0,0,0,0,0,0,0,0)
-    indices_len=(c_uint64 * 8)(2,2,2,2,2,2,2,2)
-    offsets_len=(c_uint64 * 8)(1,1,1,1,1,1,1,1)
+    indices=(c_uint32 * 24)(1,3,2,1,3,2,1,3,2,1,3,2,1,3,2,1,3,2,1,3,2,1,3)
+    offsets=(c_uint32 * 16)(0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2)
+    indices_len=(c_uint64 * 8)(3,3,3,3,3,3,3,3)
+    offsets_len=(c_uint64 * 8)(2,2,2,2,2,2,2,2)
     ans=(c_uint32 *20)()
     my_functions.lookup(indices, offsets, indices_len, offsets_len,ans)
 
