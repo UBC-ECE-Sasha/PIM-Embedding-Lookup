@@ -168,23 +168,23 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             DPU_ASSERT(dpu_copy_to(dpu, "input_offsets" , 0, (const uint32_t *)&offsets[offsets_ptr], ALIGN(offsets_len[table_ptr]*sizeof(uint32_t),8)));
             DPU_ASSERT(dpu_copy_to(dpu, "input_nr_indices" , 0, &indices_len[table_ptr], sizeof(uint64_t)));
             DPU_ASSERT(dpu_copy_to(dpu, "input_nr_indices" , 0, &offsets_len[table_ptr], sizeof(uint64_t)));
+            tmp_ptr++;
         }
     }
     printf("done with lookup data copy\n");
 
     // run dpus
     for( int k=0; k<allocated_ranks; k++){
+        printf("doing %d th rank\n",k);
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
             printf("launching %d th dpu\n",dpu_id);
-            DPU_ASSERT(dpu_launch(dpu_ranks[k], DPU_SYNCHRONOUS));
-            sleep(100);
+            DPU_ASSERT(dpu_launch(dpu, DPU_SYNCHRONOUS));
             DPU_ASSERT(dpu_log_read(dpu_ranks[k], stdout));
-            sleep(50);
         }
     }
     printf("DPUs done launching\n");
     
-    uint64_t nr_batches;
+    /* uint64_t nr_batches;
     struct lookup_result *partial_results[done_dpus];
     for( int k=0; k<allocated_ranks; k++){
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
@@ -193,7 +193,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             DPU_ASSERT(dpu_copy_from(dpu, "results", 0, partial_results[dpu_id], ALIGN(sizeof(struct lookup_result)*nr_batches,8)));
         }
     }
-    printf("Done with copying back results\n");
+    printf("Done with copying back results\n"); */
     return 0;
 }
 
