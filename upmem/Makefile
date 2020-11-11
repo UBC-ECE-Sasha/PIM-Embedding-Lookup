@@ -1,3 +1,6 @@
+# Set to 1 to use test 'toy dpu'
+DPU_TEST            ?= 0
+
 # Setting defaults
 
 PROJECT             = emb_host
@@ -9,6 +12,14 @@ NR_TASKLETS         ?= 1
 COUNTER_CONFIG      ?= "COUNT_CYCLES"
 SHOW_DPU_LOGS       ?= 1
 MAX_ENC_BUFFER_MB   ?= 1
+NR_TABLES           ?= 8
+MAX_NR_BATCHES      ?= 1024
+
+ifeq ($(DPU_TEST),1)
+  NR_COLS             ?= 5
+else
+  NR_COLS             ?= 16
+endif
 
 # Version information
 VERSION             = 0.0.0
@@ -19,9 +30,6 @@ APP_LIB             = $(BUILD_DIR)/$(PROJECT_LIB)
 APP_SOURCES         =
 APP_MAIN            = src/emb_host.c
 APP_OBJS            = $(patsubst %.c,$(BUILD_DIR)/%.o,$(APP_SOURCES) $(APP_MAIN))
-
-# Set to 1 to use test 'toy dpu'
-DPU_TEST            ?= 0
 
 # Includes
 INC                 = -Iinclude
@@ -58,6 +66,9 @@ CFLAGS              += $(COMMON_CFLAGS) \
                        -DNR_DPUS=$(NR_DPUS) \
                        -DNR_TASKLETS=$(NR_TASKLETS) \
                        -DCOUNTER_CONFIG=$(COUNTER_CONFIG) \
+                       -DNR_TABLES=$(NR_TABLES) \
+                       -DNR_COLS=$(NR_COLS) \
+                       -DMAX_NR_BATCHES=$(MAX_NR_BATCHES) \
                        -DHOST=1 \
                        -DDPU_BINARY=\"dpu/$(EXE_DPU)\" \
                        -DMAX_ENC_BUFFER_MB="$(MAX_ENC_BUFFER_MB)" \
@@ -121,6 +132,9 @@ export NR_TASKLETS
 export COUNTER_CONFIG
 export EXE_DPU
 export DPU_TEST
+export NR_TABLES
+export NR_COLS
+export MAX_NR_BATCHES
 
 dpu:
 	$(SHOW_MAKE) $@
