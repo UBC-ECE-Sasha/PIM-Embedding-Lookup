@@ -159,15 +159,16 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             if(tables[table_ptr]->nr_buffers==tmp_ptr){
                 if(indices_len[table_ptr]>max_len)
                     max_len=indices_len[table_ptr];
-                table_ptr++;
                 tmp_ptr=0;
                 indices_ptr+=indices_len[table_ptr];
                 offsets_ptr+=offsets_len[table_ptr];
+                table_ptr++;
             }
+            printf("offsets_len[%d]=%d\n",table_ptr,offsets_len[table_ptr]);
             DPU_ASSERT(dpu_copy_to(dpu, "input_indices" , 0, (const uint32_t *)&indices[indices_ptr], ALIGN(indices_len[table_ptr]*sizeof(uint32_t),8)));
             DPU_ASSERT(dpu_copy_to(dpu, "input_offsets" , 0, (const uint32_t *)&offsets[offsets_ptr], ALIGN(offsets_len[table_ptr]*sizeof(uint32_t),8)));
-            DPU_ASSERT(dpu_copy_to(dpu, "input_nr_indices" , 0, &indices_len[table_ptr], sizeof(uint64_t)));
-            DPU_ASSERT(dpu_copy_to(dpu, "input_nr_indices" , 0, &offsets_len[table_ptr], sizeof(uint64_t)));
+            DPU_ASSERT(dpu_copy_to(dpu, "input_nr_indices" , 0, (const uint64_t *)&indices_len[table_ptr], sizeof(uint64_t)));
+            DPU_ASSERT(dpu_copy_to(dpu, "input_nr_indices" , 0, (const uint64_t *)&offsets_len[table_ptr], sizeof(uint64_t)));
             tmp_ptr++;
         }
     }
@@ -179,7 +180,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
             printf("launching %d th dpu\n",dpu_id);
             DPU_ASSERT(dpu_launch(dpu, DPU_SYNCHRONOUS));
-            DPU_ASSERT(dpu_log_read(dpu_ranks[k], stdout));
+            DPU_ASSERT(dpu_log_read(dpu, stdout));
         }
     }
     printf("DPUs done launching\n");
