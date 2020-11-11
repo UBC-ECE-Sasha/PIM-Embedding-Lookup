@@ -3,11 +3,9 @@
 
 #define MAX_ENC_BUFFER_SIZE MEGABYTE(MAX_ENC_BUFFER_MB)
 #define MAX_CAPACITY MEGABYTE(14) //Must be a multiply of 2
-#define NR_TABLES 8
 #define DPUS_PER_RANK 64
 #define AVAILABLE_RANKS 10
 #define MAX_NR_BUFFERS 100
-#define NR_COLS 5
 
 struct embedding_buffer {
     int32_t *data;
