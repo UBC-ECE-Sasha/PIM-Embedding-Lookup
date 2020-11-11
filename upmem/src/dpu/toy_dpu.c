@@ -12,9 +12,9 @@ __mram_noinit uint64_t input_nr_indices;
 __mram_noinit uint64_t input_nr_offsets;
 
 __mram_noinit int32_t emb_data[MEGABYTE(14)];
-__mram_noinit uint32_t input_indices[1024];
-__mram_noinit uint32_t input_offsets[1024];
-__mram_noinit struct lookup_result results[1024];
+__mram_noinit uint32_t input_indices[4*MAX_NR_BATCHES];
+__mram_noinit uint32_t input_offsets[MAX_NR_BATCHES];
+__host struct lookup_result results[MAX_NR_BATCHES];
 
 int
 main() {
@@ -23,6 +23,7 @@ main() {
     uint64_t nr_batches, indices_len;
     uint32_t indices_ptr=0;
     uint32_t indices[1024], offsets[1024];
+    int32_t tmp_buff[ALIGN(NR_COLS,8)];
 
     mram_read(&input_nr_indices, &indices_len, sizeof(uint64_t));
     mram_read(&input_nr_offsets, &nr_batches, sizeof(uint64_t));
@@ -46,9 +47,11 @@ main() {
         printf("processing %lu th batch\n",i);
         while (indices_ptr<offsets[i+1])
         {
-            if(indices[indices_ptr]<=last_row && indices[indices_ptr]>=first_row)
+            if(indices[indices_ptr]<=last_row && indices[indices_ptr]>=first_row){
+                mram_read(&emb_data[indices[indices_ptr]*NR_COLS],tmp_buff,ALIGN(NR_COLS,8));
                 for (int j=0; j<NR_COLS; j++)
-                        results[i].data[j]+=emb_data[indices[indices_ptr]*NR_COLS+j];
+                        results[i].data[j]+=tmp_buff[j];
+            }
             else
                 results[i].is_complete=false;
             indices_ptr++;
@@ -57,9 +60,11 @@ main() {
             results[i+1].data[j]=0;
         printf("processing last batch\n");
         while(indices_ptr<indices_len){
-            if(indices[indices_ptr]<=last_row && indices[indices_ptr]>=first_row)
+            if(indices[indices_ptr]<=last_row && indices[indices_ptr]>=first_row){
+                mram_read(&emb_data[indices[indices_ptr]*NR_COLS],tmp_buff,ALIGN(NR_COLS,8));
                 for (int j=0; j<NR_COLS; j++)
-                    results[i+1].data[j]+=emb_data[indices[indices_ptr]*NR_COLS+j];
+                    results[i+1].data[j]+=tmp_buff[j];
+            }
             else
                 results[i+1].is_complete=false;
             
