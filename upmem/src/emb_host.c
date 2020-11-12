@@ -78,7 +78,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
         DPU_FOREACH(set, dpu, dpu_id){
             len= (buffers[done_dpus+dpu_id]->last_row-buffers[done_dpus+dpu_id]->first_row+1)*NR_COLS;
             DPU_ASSERT(dpu_copy_to(dpu, "emb_data" , 0, (const int32_t *)buffers[done_dpus+dpu_id]->data, ALIGN(len*sizeof(int32_t),8)));
-            DPU_ASSERT(dpu_prepare_xfer(dpu, &buffers[done_dpus+dpu_id]));
+            DPU_ASSERT(dpu_prepare_xfer(dpu, buffers[done_dpus+dpu_id]));
             printf("copied %dth buffer to dpu\n",dpu_id);
         }
         DPU_ASSERT(dpu_push_xfer(set,DPU_XFER_TO_DPU, "emb_buffer", 0, sizeof(struct embedding_buffer), DPU_XFER_DEFAULT));
@@ -191,7 +191,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
             DPU_ASSERT(dpu_copy_from(dpu, "input_nr_offsets", 0 , &nr_batches, sizeof(uint64_t)));
             partial_results[dpu_id]=malloc(sizeof(struct lookup_result)*nr_batches);
-            DPU_ASSERT(dpu_copy_from(dpu, "results", 0, partial_results[dpu_id], ALIGN(sizeof(struct lookup_result)*nr_batches,8)));
+            DPU_ASSERT(dpu_copy_from(dpu, "results", 0, &partial_results[dpu_id][0], ALIGN(sizeof(struct lookup_result)*nr_batches,8)));
             printf("%d dpu result:\n",dpu_id);
             for( int j=0; j<nr_batches; j++){
                 printf("%d batch:\n", j);
