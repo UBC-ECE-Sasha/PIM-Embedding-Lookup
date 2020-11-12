@@ -18,18 +18,6 @@ __host struct lookup_result results[MAX_NR_BATCHES];
 
 int
 main() {
-<<<<<<< HEAD
-    uint64_t nr_batches, indices_len;
-    uint32_t indices_ptr=0;
-    uint32_t indices[1024], offsets[1024];
-    int32_t tmp_buff[ALIGN(NR_COLS,8)];
-    struct embedding_buffer table;
-
-    mram_read(&emb_buffer, &table, ALIGN(sizeof(struct embedding_buffer),8));
-    uint32_t first_row = table.first_row;
-    uint32_t last_row = table.last_row;
-    printf("first_row in dpu=%d and last_row in dpu=%d\n",first_row, last_row);
-=======
     struct embedding_buffer table;
     mram_read(&emb_buffer, &table, ALIGN(sizeof(struct embedding_buffer),8));
     uint32_t first_row = table.first_row;
@@ -41,7 +29,6 @@ main() {
     uint32_t indices_ptr=0;
     uint32_t indices[1024], offsets[1024];
     int32_t tmp_buff[ALIGN(NR_COLS+1,8)];
->>>>>>> 0cebfe1d0c60f2575925051c945ceb1a9d30f266
 
     mram_read(&input_nr_indices, &indices_len, sizeof(uint64_t));
     mram_read(&input_nr_offsets, &nr_batches, sizeof(uint64_t));
@@ -67,26 +54,32 @@ main() {
             while (indices_ptr<offsets[i+1])
             {
                 if(indices[indices_ptr]<=last_row && indices[indices_ptr]>=first_row){
-                    mram_read(&emb_data[indices[indices_ptr]*NR_COLS],tmp_buff,ALIGN(NR_COLS*sizeof(int32_t),8));
-                    for (int j=0; j<NR_COLS; j++)
-                            results[i].data[j]+=tmp_buff[j];
+                    uint32_t ind = indices[indices_ptr]*NR_COLS;
+                    mram_read(&emb_data[ind],tmp_buff,ALIGN(NR_COLS*sizeof(int32_t),8));
+                    for (int j=0; j<NR_COLS; j++) {
+                        /* Read from j + ((ind % 2) != 0) when read was from non-aligned address */
+                        results[i].data[j]+=tmp_buff[j+((ind % 2) != 0)];
+                    }
                 }
                 else
                     results[i].is_complete=false;
                 indices_ptr++;
                 printf("dpu results:%d,%d,%d,%d,%d\n",tmp_buff[0],tmp_buff[1],tmp_buff[2],tmp_buff[3],tmp_buff[4]);
-            } 
+            }
         }
         else{
             while(indices_ptr<indices_len){
                 if(indices[indices_ptr]<=last_row && indices[indices_ptr]>=first_row){
-                    mram_read(&emb_data[indices[indices_ptr]*NR_COLS],tmp_buff,ALIGN(NR_COLS*sizeof(int32_t),8));
-                    for (int j=0; j<NR_COLS; j++)
-                        results[i].data[j]+=tmp_buff[j];
+                    uint32_t ind = indices[indices_ptr]*NR_COLS;
+                    mram_read(&emb_data[ind],tmp_buff,ALIGN(NR_COLS*sizeof(int32_t),8));
+                    for (int j=0; j<NR_COLS; j++) {
+                        /* Read from j + ((ind % 2) != 0) when read was from non-aligned address */
+                        results[i].data[j]+=tmp_buff[j+((ind % 2) != 0)];
+                    }
                 }
                 else
                     results[i].is_complete=false;
-            
+
                 indices_ptr++;
                 printf("dpu results:%d,%d,%d,%d,%d\n",tmp_buff[0],tmp_buff[1],tmp_buff[2],tmp_buff[3],tmp_buff[4]);
             }
