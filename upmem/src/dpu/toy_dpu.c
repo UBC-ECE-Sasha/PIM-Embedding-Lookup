@@ -18,6 +18,7 @@ __host struct lookup_result results[MAX_NR_BATCHES];
 
 int
 main() {
+<<<<<<< HEAD
     uint64_t nr_batches, indices_len;
     uint32_t indices_ptr=0;
     uint32_t indices[1024], offsets[1024];
@@ -28,13 +29,27 @@ main() {
     uint32_t first_row = table.first_row;
     uint32_t last_row = table.last_row;
     printf("first_row in dpu=%d and last_row in dpu=%d\n",first_row, last_row);
+=======
+    struct embedding_buffer table;
+    mram_read(&emb_buffer, &table, ALIGN(sizeof(struct embedding_buffer),8));
+    uint32_t first_row = table.first_row;
+    uint32_t last_row = table.last_row;
+
+    printf("first_row in dpu=%d and last_row in dpu=%d\n",first_row, last_row);
+
+    uint64_t nr_batches, indices_len;
+    uint32_t indices_ptr=0;
+    uint32_t indices[1024], offsets[1024];
+    int32_t tmp_buff[ALIGN(NR_COLS+1,8)];
+>>>>>>> 0cebfe1d0c60f2575925051c945ceb1a9d30f266
 
     mram_read(&input_nr_indices, &indices_len, sizeof(uint64_t));
     mram_read(&input_nr_offsets, &nr_batches, sizeof(uint64_t));
     mram_read(input_indices,indices,ALIGN(indices_len*sizeof(uint32_t),8));
     mram_read(input_offsets,offsets,ALIGN(nr_batches*sizeof(uint32_t),8));
 
-    printf("indices_len=%lu and nr_batches=%lu\n",indices_len, nr_batches);
+    printf("input_nr_indices=%ld\n",indices_len);
+    printf("input_nr_offsets=%ld\n",nr_batches);
 
     for(uint64_t i=0; i<indices_len; i++)
         printf("indices[%lu]=%d\n",i,indices[i]);
