@@ -150,7 +150,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
     Result:
     This function updates ans with the elements of the rows that we have lookedup
 */
-int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uint64_t *offsets_len, uint32_t *lookup_ans){
+int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uint64_t *offsets_len, int32_t *final_results){
     printf("doing lookup\n");
     int dpu_id, tmp_ptr=0, table_ptr=0, indices_ptr=0, offsets_ptr=0, max_len=0;
     struct dpu_set_t dpu;
@@ -204,6 +204,41 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
         }
     }
     printf("Done with copying back results\n");
+
+    int result_ptr=0, data_ptr=0;
+    int32_t tmp_result[NR_COLS];
+    for( int k=0; k<NR_TABLES; k++){
+        if(tables[k]->nr_buffers==1){
+            for( int j=0; j<offsets_len[k]; j++){
+                for(int i=0; i<NR_COLS; i++){
+                    final_results[data_ptr+i]=partial_results[result_ptr][j].data[i];
+                    printf("final_result[%d]=%d for table %d and batch %d\n",data_ptr+i, final_results[data_ptr+i], k, j);
+                }
+                data_ptr+=NR_COLS;
+            }
+            result_ptr++;
+        }
+        else{
+            for( int j=0; j<offsets_len[k]; j++){
+                for (int l=0; l<NR_COLS; l++)
+                    tmp_result[l]=0;
+                for( int t=0; t< tables[k]->nr_buffers; t++){
+                    for(int i=0; i<NR_COLS; i++){
+                        tmp_result[i]+=partial_results[result_ptr+t][j].data[i];
+                    }
+                }
+                for( int i=0; i< NR_COLS; i++){
+                    final_results[data_ptr+i]=tmp_result[i];
+                }
+                data_ptr+=NR_COLS;
+            }
+            result_ptr+=tables[k]->nr_buffers;
+        }
+    }
+    printf("final results array:\n");
+    for (int i=0; i<data_ptr; i++)
+        printf("%d, ",final_results[i]);
+    printf("\n--------------------\n");
 
     return 0;
 }

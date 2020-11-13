@@ -32,13 +32,13 @@ def populate():
 
 
 def lookup():
-    my_functions.lookup.argtypes = POINTER(c_uint32), POINTER(c_uint32), POINTER(c_uint64), POINTER(c_uint64), POINTER(c_uint32)
+    my_functions.lookup.argtypes = POINTER(c_uint32), POINTER(c_uint32), POINTER(c_uint64), POINTER(c_uint64), POINTER(c_int32)
     my_functions.lookup.restype = None
     indices=(c_uint32 * 24)(1,3,2,1,3,2,1,3,2,1,3,2,1,3,2,1,3,2,1,3,2,1,3,2)
     offsets=(c_uint32 * 16)(0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2)
     indices_len=(c_uint64 * 8)(3,3,3,3,3,3,3,3)
     offsets_len=(c_uint64 * 8)(2,2,2,2,2,2,2,2)
-    ans=(c_uint32 *20)()
+    ans=(c_int32 * 80)()
     my_functions.lookup(indices, offsets, indices_len, offsets_len,ans)
 
 
