@@ -1,0 +1,139 @@
+#!/bin/sh
+
+set -e
+
+build=false
+run=false
+debug=false
+verbose=false
+
+usage() {
+    printf "%s %s\n\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n" \
+        "USAGE:" "${0}" \
+        "[ -b ] - Build code" \
+        "[ -r ] - Run code" \
+        "[ -d ] - Debug" \
+        "[ -V ] - Verbose" \
+        "<DATASET - kaggle | random | toy>"
+    exit 0
+}
+
+die() {
+    echo "${1}" 1>&2
+    exit 1
+}
+
+dataset_valid() {
+    [ "${1}" = "kaggle" ] && return 0
+    [ "${1}" = "random" ] && return 0
+    [ "${1}" = "toy" ] && return 0
+
+    return 1
+}
+
+kaggle_env() {
+    export NR_TABLES=26
+    export NR_COLS=16
+    export MAX_NR_BATCHES=440
+}
+
+random_env() {
+    export NR_TABLES=12
+    export NR_COLS=180
+    export MAX_NR_BATCHES=440
+}
+
+toy_env() {
+    export TEST=1
+}
+
+global_env() {
+    "${verbose}" && export V=1
+    "${debug}" && export DEBUG=1
+    return 0
+}
+
+kaggle_run() {
+    dlrm="${cwd}/../"
+    python "${dlrm}/dlrm_dpu_pytorch.py" \
+           --arch-sparse-feature-size=16 \
+           --arch-mlp-bot="13-512-256-64-16" \
+           --arch-mlp-top="512-256-1" \
+           --data-generation=dataset \
+           --data-set=kaggle \
+           --processed-data-file="${dlrm}/raw_data/kaggleAdDisplayChallenge_processed.npz" \
+           --load-model="${dlrm}/trainedModels/kaggle-model-graham-final.pt" \
+           --mini-batch-size=500 \
+           --nepochs=1 \
+           --inference-only
+}
+
+random_run() {
+    python "${cwd}/../dlrm/dlrm_dpu_pytorch.py" \
+           --arch-embedding-size=1000-1000-1000-1000-1000-1000-1000-1000-1000-1000-1000-1000 \
+           --arch-sparse-feature-size=180 \
+           --arch-mlp-bot=1440-720-180 \
+           --arch-mlp-top=40-20-10-1 \
+           --data-generation=random \
+           --mini-batch-size=440 \
+           --num-batches=100 \
+           --num-indices-per-lookup=512 \
+           --inference-only
+}
+
+toy_run() {
+    python "${cwd}/c_test.py"
+}
+
+build_code() {
+    # Set ENV
+    "${dataset}_env"
+    global_env
+
+    make
+}
+
+run_code() {
+    cwd="${PWD}"
+    if "${debug}"; then
+        build_dir="./build/debug/"
+    else
+        build_dir="./build/release/"
+    fi
+    cd "${build_dir}"
+    "${dataset}_run"
+}
+
+main() {
+    "${build}" && build_code
+    "${run}" && run_code
+}
+
+options=':bVrdh'
+while getopts "${options}" option; do
+    case $option in
+        b  ) build=true;;
+        r  ) run=true;;
+        d  ) debug=true;;
+        V  ) verbose=true;;
+        h  ) usage;;
+        \? ) echo "Unknown option: -${OPTARG}" >&2; exit 1;;
+        :  ) echo "Missing option argument for -${OPTARG}" >&2; exit 1;;
+        *  ) echo "Unimplemented option: -${OPTARG}" >&2; exit 1;;
+    esac
+done
+
+shift $((OPTIND - 1))
+
+if ! dataset_valid "${1}"; then
+    die "'${1}' is not a valid dataset (kaggle | random | toy)"
+fi
+
+if ! "${build}" && ! "${run}"; then
+    die "Neither -b or -r were used, doing nothing"
+    exit 0
+fi
+
+dataset="${1}"
+
+main
