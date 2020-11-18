@@ -44,7 +44,7 @@ random_env() {
 }
 
 toy_env() {
-    export TEST=1
+    export DPU_TEST=1
 }
 
 global_env() {
@@ -82,7 +82,7 @@ random_run() {
 }
 
 toy_run() {
-    python "${cwd}/c_test.py"
+    python3 "${cwd}/c_test.py"
 }
 
 build_code() {

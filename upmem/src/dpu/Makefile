@@ -11,12 +11,7 @@ ifeq ($(TEST), 1)
 endif
 
 # Application sources and artifacts
-
-ifeq ($(DPU_TEST), 1)
-	APP_MAIN            = toy_dpu.c
-else
-  APP_MAIN            = emb_dpu_lookup.c
-endif
+APP_MAIN            = emb_dpu_lookup.c
 
 EXE_DPU             ?= emb_dpu_lookup
 APP_BIN             = $(BUILD_DIR)/$(EXE_DPU)

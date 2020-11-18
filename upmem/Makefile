@@ -1,6 +1,3 @@
-# Set to 1 to use test 'toy dpu'
-DPU_TEST            ?= 0
-
 # Setting defaults
 
 PROJECT             = emb_host
@@ -14,6 +11,9 @@ SHOW_DPU_LOGS       ?= 1
 MAX_ENC_BUFFER_MB   ?= 1
 NR_TABLES           ?= 8
 MAX_NR_BATCHES      ?= 1024
+
+# TEST with c_test.py
+DPU_TEST            ?= 0
 
 ifeq ($(DPU_TEST),1)
   NR_COLS             ?= 5
@@ -131,7 +131,6 @@ export NR_DPUS
 export NR_TASKLETS
 export COUNTER_CONFIG
 export EXE_DPU
-export DPU_TEST
 export NR_TABLES
 export NR_COLS
 export MAX_NR_BATCHES
