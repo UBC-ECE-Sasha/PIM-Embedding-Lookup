@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <errno.h>
 
 #ifndef DPU_BINARY
 #    define DPU_BINARY "../upmem/emb_dpu_lookup" // Relative path regarding the PyTorch code
@@ -22,6 +23,58 @@ uint32_t ready_to_alloc_buffs=0, done_dpus=0, allocated_ranks=0;
 struct embedding_buffer *buffers[MAX_NR_BUFFERS];
 struct embedding_table *tables[NR_TABLES];
 struct dpu_set_t dpu_ranks[AVAILABLE_RANKS];
+
+static void enomem() {
+    fprintf(stderr, "Out of memory\n");
+    exit(ENOMEM);
+}
+
+static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_rows, uint32_t *first_row, uint32_t *last_row) {
+    uint64_t table_size = nr_rows*NR_COLS;
+
+    tables[table_id]=malloc(sizeof(struct embedding_table));
+
+    if (tables[table_id] == NULL) {
+        return ENOMEM;
+    }
+
+    tables[table_id]->nr_rows = nr_rows;
+
+    tables[table_id]->nr_buffers = (int)((table_size*1.0)/(MAX_CAPACITY*1.0));
+    if((table_size%MAX_CAPACITY) != 0){
+        tables[table_id]->nr_buffers+=1;
+    }
+    tables[table_id]->first_dpu_id=total_buffers;
+    for(int j=0; j<tables[table_id]->nr_buffers; j++){
+        *first_row = j*MAX_CAPACITY/NR_COLS;
+        *last_row = MIN(nr_rows-1, ((j+1)*MAX_CAPACITY)/NR_COLS-1);
+
+        buffers[total_buffers] = malloc(sizeof(struct embedding_buffer));
+        if (buffers[total_buffers] == NULL) {
+            return ENOMEM;
+        }
+
+        buffers[total_buffers]->first_row = *first_row;
+        buffers[total_buffers]->last_row = *last_row;
+        buffers[total_buffers]->table_id = table_id;
+        
+        size_t sz = (*last_row-*first_row+1)*NR_COLS*sizeof(int32_t);
+        buffers[total_buffers]->data = malloc(ALIGN(sz,8));
+        if (buffers[total_buffers]->data == NULL) {
+            return ENOMEM;
+        }
+
+        for(int k=0; k<(*last_row-*first_row+1)*NR_COLS; k++){
+            buffers[total_buffers]->data[k] = table_data[(*first_row*NR_COLS)+k];
+        }
+        total_buffers++;
+    }
+    ready_to_alloc_buffs += tables[table_id]->nr_buffers;
+    tables[table_id]->last_dpu_id = total_buffers;
+
+    return 0;
+}
+
 /*
     Params:
     0. table_id: embedding table number.
@@ -36,29 +89,10 @@ struct dpu_set_t dpu_ranks[AVAILABLE_RANKS];
 */
 
 void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
-    uint64_t table_size=nr_rows*NR_COLS;
-    tables[table_id]=malloc(sizeof(struct embedding_table));
-    tables[table_id]->nr_rows=nr_rows;
-
-    tables[table_id]->nr_buffers=(int)((table_size*1.0)/(MAX_CAPACITY*1.0));
-    if(table_size%MAX_CAPACITY!=0){
-            tables[table_id]->nr_buffers+=1;
-        }
-    tables[table_id]->first_dpu_id=total_buffers;
     uint32_t first_row, last_row;
-    for(int j=0; j<tables[table_id]->nr_buffers; j++){
-            buffers[total_buffers]=malloc(sizeof(struct embedding_buffer));
-            buffers[total_buffers]->first_row=first_row=j*MAX_CAPACITY/NR_COLS;
-            buffers[total_buffers]->last_row=last_row=MIN(nr_rows-1, ((j+1)*MAX_CAPACITY)/NR_COLS-1);
-            buffers[total_buffers]->table_id=table_id;
-            buffers[total_buffers]->data=malloc(ALIGN((last_row-first_row+1)*NR_COLS*sizeof(int32_t),8));
-            for(int k=0; k<(last_row-first_row+1)*NR_COLS; k++){
-                buffers[total_buffers]->data[k]=table_data[(first_row*NR_COLS)+k];
-            }
-            total_buffers++;
-        }
-    ready_to_alloc_buffs+=tables[table_id]->nr_buffers;
-    tables[table_id]->last_dpu_id=total_buffers;
+    if (alloc_buffers(table_id, table_data, nr_rows, &first_row, &last_row) != 0) {
+        enomem();
+    }
 
     printf("done with %dth table\n", table_id);
 
@@ -89,7 +123,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
             dpu_launch(dpu, DPU_SYNCHRONOUS);
             first_row=buffers[done_dpus+dpu_id]->first_row;
             last_row=buffers[done_dpus+dpu_id]->last_row;
-            printf("In host last_row:%d, first row:%d & NR_COLS:%d\n",last_row,first_row,NR_COLS); 
+            printf("In host last_row:%d, first row:%d & NR_COLS:%d\n",last_row,first_row,NR_COLS);
             printf("first: %d, 2nd: %d, -1: %d, last: %dfor %d buffer\n",buffers[dpu_id]->data[0],
             buffers[dpu_id]->data[1],
             buffers[dpu_id]->data[(last_row-first_row+1)*NR_COLS-2],
@@ -184,7 +218,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
         }
     }
     printf("DPUs done launching\n");
-    
+
      uint64_t nr_batches;
     struct lookup_result *partial_results[done_dpus];
     for( int k=0; k<allocated_ranks; k++){
@@ -200,7 +234,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
                 printf("\n");
             }
             printf("\n------------------\n");
-                
+
         }
     }
     printf("Done with copying back results\n");
