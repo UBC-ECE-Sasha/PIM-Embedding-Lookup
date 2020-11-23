@@ -34,12 +34,12 @@ dataset_valid() {
 kaggle_env() {
     export NR_TABLES=26
     export NR_COLS=16
-    export MAX_NR_BATCHES=440
+    export MAX_NR_BATCHES=512
 }
 
 random_env() {
     export NR_TABLES=12
-    export NR_COLS=180
+    export NR_COLS=200
     export MAX_NR_BATCHES=440
 }
 
@@ -54,7 +54,7 @@ global_env() {
 }
 
 kaggle_run() {
-    dlrm="${cwd}/../"
+    dlrm="${cwd}/../dlrm"
     python "${dlrm}/dlrm_dpu_pytorch.py" \
            --arch-sparse-feature-size=16 \
            --arch-mlp-bot="13-512-256-64-16" \
@@ -70,7 +70,7 @@ kaggle_run() {
 
 random_run() {
     python "${cwd}/../dlrm/dlrm_dpu_pytorch.py" \
-           --arch-embedding-size=1000-1000-1000-1000-1000-1000-1000-1000-1000-1000-1000-1000 \
+           --arch-embedding-size=65000-65000-65000-65000-65000-65000-65000-65000-65000-65000-65000-65000 \
            --arch-sparse-feature-size=180 \
            --arch-mlp-bot=1440-720-180 \
            --arch-mlp-top=40-20-10-1 \

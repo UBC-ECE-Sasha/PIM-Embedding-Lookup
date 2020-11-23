@@ -164,7 +164,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
                 offsets_ptr+=offsets_len[table_ptr];
                 table_ptr++;
             }
-            printf("indices_len[%d]=%d and offsets_len[%d]=%d\n",table_ptr,indices_len[table_ptr],table_ptr,offsets_len[table_ptr]);
+            //printf("indices_len[%d]=%d and offsets_len[%d]=%d\n",table_ptr,indices_len[table_ptr],table_ptr,offsets_len[table_ptr]);
             DPU_ASSERT(dpu_copy_to(dpu, "input_indices" , 0, (const uint32_t *)&indices[indices_ptr], ALIGN(indices_len[table_ptr]*sizeof(uint32_t),8)));
             DPU_ASSERT(dpu_copy_to(dpu, "input_offsets" , 0, (const uint32_t *)&offsets[offsets_ptr], ALIGN(offsets_len[table_ptr]*sizeof(uint32_t),8)));
             DPU_ASSERT(dpu_copy_to(dpu, "input_nr_indices" , 0, &indices_len[table_ptr], sizeof(uint64_t)));
@@ -185,21 +185,21 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
     }
     printf("DPUs done launching\n");
     
-     uint64_t nr_batches;
+    uint64_t nr_batches;
     struct lookup_result *partial_results[done_dpus];
     for( int k=0; k<allocated_ranks; k++){
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
             DPU_ASSERT(dpu_copy_from(dpu, "input_nr_offsets", 0 , &nr_batches, sizeof(uint64_t)));
             partial_results[dpu_id]=malloc(sizeof(struct lookup_result)*nr_batches);
             DPU_ASSERT(dpu_copy_from(dpu, "results", 0, &partial_results[dpu_id][0], ALIGN(sizeof(struct lookup_result)*nr_batches,8)));
-            printf("%d dpu result:\n",dpu_id);
+            /* printf("%d dpu result:\n",dpu_id);
             for( int j=0; j<nr_batches; j++){
                 printf("%d batch:\n", j);
                 for (int i=0;i<NR_COLS; i++)
                     printf("%d,",partial_results[dpu_id][j].data[i]);
                 printf("\n");
             }
-            printf("\n------------------\n");
+            printf("\n------------------\n"); */
                 
         }
     }
@@ -212,7 +212,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             for( int j=0; j<offsets_len[k]; j++){
                 for(int i=0; i<NR_COLS; i++){
                     final_results[data_ptr+i]=partial_results[result_ptr][j].data[i];
-                    printf("final_result[%d]=%d for table %d and batch %d\n",data_ptr+i, final_results[data_ptr+i], k, j);
+                    //printf("final_result[%d]=%d for table %d and batch %d\n",data_ptr+i, final_results[data_ptr+i], k, j);
                 }
                 data_ptr+=NR_COLS;
             }
@@ -239,7 +239,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
     for (int i=0; i<data_ptr; i++)
         printf("%d, ",final_results[i]);
     printf("\n--------------------\n");
-
+    
     return 0;
 }
 
