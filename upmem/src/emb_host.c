@@ -81,7 +81,6 @@ static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_row
     1. nr_rows: number of rows of the embedding table
     2. NR_COLS: number of columns of the embedding table
     3. table_data: a pointer of the size nr_rows*NR_COLS containing table's data
-
     Result:
     This function breaks down each embedding table into chunks of maximum MAX_CAPACITY
     and pushes each chunk(buffer) to one dpu as well as number of rows and columns of the
@@ -180,13 +179,13 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
     3. length: contains the number of rows that we want to lookup from the table
     4. nr_rows: number of rows of the embedding table
     5. NR_COLS: number of columns of the embedding table
-
     Result:
     This function updates ans with the elements of the rows that we have lookedup
 */
 int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uint64_t *offsets_len, int32_t *final_results){
     printf("doing lookup\n");
     int dpu_id, tmp_ptr=0, table_ptr=0, indices_ptr=0, offsets_ptr=0, max_len=0;
+    uint64_t copied_indices;
     struct dpu_set_t dpu;
     for( int k=0; k<allocated_ranks; k++){
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
@@ -198,8 +197,12 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
                 offsets_ptr+=offsets_len[table_ptr];
                 table_ptr++;
             }
-            //printf("indices_len[%d]=%d and offsets_len[%d]=%d\n",table_ptr,indices_len[table_ptr],table_ptr,offsets_len[table_ptr]);
-            DPU_ASSERT(dpu_copy_to(dpu, "input_indices" , 0, (const uint32_t *)&indices[indices_ptr], ALIGN(indices_len[table_ptr]*sizeof(uint32_t),8)));
+            copied_indices=0;
+            while(copied_indices<indices_len[table_ptr]){
+                DPU_ASSERT(dpu_copy_to(dpu, "input_indices" , copied_indices*sizeof(uint32_t), (const uint32_t *)&indices[indices_ptr+copied_indices], 
+                ALIGN(MIN(2048,(indices_len[table_ptr]-copied_indices)*sizeof(uint32_t)),8)));
+                copied_indices+=2048/sizeof(uint32_t);
+            }
             DPU_ASSERT(dpu_copy_to(dpu, "input_offsets" , 0, (const uint32_t *)&offsets[offsets_ptr], ALIGN(offsets_len[table_ptr]*sizeof(uint32_t),8)));
             DPU_ASSERT(dpu_copy_to(dpu, "input_nr_indices" , 0, &indices_len[table_ptr], sizeof(uint64_t)));
             DPU_ASSERT(dpu_copy_to(dpu, "input_nr_offsets" , 0, &offsets_len[table_ptr], sizeof(uint64_t)));
@@ -226,18 +229,9 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             DPU_ASSERT(dpu_copy_from(dpu, "input_nr_offsets", 0 , &nr_batches, sizeof(uint64_t)));
             partial_results[dpu_id]=malloc(sizeof(struct lookup_result)*nr_batches);
             DPU_ASSERT(dpu_copy_from(dpu, "results", 0, &partial_results[dpu_id][0], ALIGN(sizeof(struct lookup_result)*nr_batches,8)));
-            /* printf("%d dpu result:\n",dpu_id);
-            for( int j=0; j<nr_batches; j++){
-                printf("%d batch:\n", j);
-                for (int i=0;i<NR_COLS; i++)
-                    printf("%d,",partial_results[dpu_id][j].data[i]);
-                printf("\n");
-            }
-            printf("\n------------------\n");
         }
     }
     printf("Done with copying back results\n");
-
     int result_ptr=0, data_ptr=0;
     int32_t tmp_result[NR_COLS];
     for( int k=0; k<NR_TABLES; k++){
@@ -245,7 +239,6 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             for( int j=0; j<offsets_len[k]; j++){
                 for(int i=0; i<NR_COLS; i++){
                     final_results[data_ptr+i]=partial_results[result_ptr][j].data[i];
-                    //printf("final_result[%d]=%d for table %d and batch %d\n",data_ptr+i, final_results[data_ptr+i], k, j);
                 }
                 data_ptr+=NR_COLS;
             }
@@ -267,15 +260,10 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             }
             result_ptr+=tables[k]->nr_buffers;
         }
-    }
-    printf("final results array:\n");
-    for (int i=0; i<data_ptr; i++)
-        printf("%d, ",final_results[i]);
-    printf("\n--------------------\n");
-    
+        printf("done with lookup\n");
+    } 
     return 0;
 }
-
 int
 main() {
 }

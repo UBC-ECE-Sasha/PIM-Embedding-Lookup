@@ -10,13 +10,13 @@ COUNTER_CONFIG      ?= "COUNT_CYCLES"
 SHOW_DPU_LOGS       ?= 1
 MAX_ENC_BUFFER_MB   ?= 1
 NR_TABLES           ?= 8
-MAX_NR_BATCHES      ?= 1024
+MAX_NR_BATCHES      ?= 32
 
 # TEST with c_test.py
 DPU_TEST            ?= 0
 
 ifeq ($(DPU_TEST),1)
-  NR_COLS             ?= 5
+  NR_COLS             ?= 6
 else
   NR_COLS             ?= 16
 endif

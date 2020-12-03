@@ -21,7 +21,7 @@ struct embedding_table {
 };
 
 struct lookup_result {
-    int32_t data[NR_COLS];
+    int32_t data[ALIGN(NR_COLS,2)];
     uint32_t id;
     bool is_complete;
 };
