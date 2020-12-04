@@ -260,8 +260,8 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             }
             result_ptr+=tables[k]->nr_buffers;
         }
-        printf("done with lookup\n");
     } 
+    printf("done with lookup\n");
     return 0;
 }
 int
