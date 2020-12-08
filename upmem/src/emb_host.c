@@ -97,7 +97,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
     // allocate a rank and copy embedding data.
     if (ready_to_alloc_buffs >= DPUS_PER_RANK || table_id == NR_TABLES - 1) {
         struct dpu_set_t set, dpu, dpu_rank;
-        printf("allocating %d dpus and %d dpus allocated before.\n", ready_to_alloc_buffs, done_dpus);
+        //printf("allocating %d dpus and %d dpus allocated before.\n", ready_to_alloc_buffs, done_dpus);
         if (ready_to_alloc_buffs <= DPUS_PER_RANK)
             DPU_ASSERT(dpu_alloc(ready_to_alloc_buffs, NULL, &set));
         else
@@ -205,7 +205,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             tmp_ptr++;
         }
     }
-    printf("done with lookup data copy\n");
+    //printf("done with lookup data copy\n");
 
     // run dpus
     for( int k=0; k<allocated_ranks; k++){
@@ -213,7 +213,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             DPU_ASSERT(dpu_launch(dpu, DPU_SYNCHRONOUS));
         }
     }
-    printf("DPUs done launching\n");
+    //printf("DPUs done launching\n");
     
     uint64_t nr_batches;
     struct lookup_result *partial_results[done_dpus];
@@ -224,7 +224,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             DPU_ASSERT(dpu_copy_from(dpu, "results", 0, &partial_results[dpu_id][0], ALIGN(sizeof(struct lookup_result)*nr_batches,8)));
         }
     }
-    printf("Done with copying back results\n");
+    //printf("Done with copying back results\n");
     int result_ptr=0, data_ptr=0;
     int32_t tmp_result[NR_COLS];
     for( int k=0; k<NR_TABLES; k++){
@@ -254,7 +254,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             result_ptr+=tables[k]->nr_buffers;
         }
     } 
-    printf("done with lookup\n");
+    //printf("done with lookup\n");
     return 0;
 }
 int
