@@ -93,8 +93,6 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
         enomem();
     }
 
-    printf("done with %dth table\n", table_id);
-
     // Done with analyzing all tables or nr ready_to_alloc_buffs enough for a rank so
     // allocate a rank and copy embedding data.
     if (ready_to_alloc_buffs >= DPUS_PER_RANK || table_id == NR_TABLES - 1) {
@@ -112,7 +110,6 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
             len= (buffers[done_dpus+dpu_id]->last_row-buffers[done_dpus+dpu_id]->first_row+1)*NR_COLS;
             DPU_ASSERT(dpu_copy_to(dpu, "emb_data" , 0, (const int32_t *)buffers[done_dpus+dpu_id]->data, ALIGN(len*sizeof(int32_t),8)));
             DPU_ASSERT(dpu_prepare_xfer(dpu, buffers[done_dpus+dpu_id]));
-            printf("copied %dth buffer to dpu\n",dpu_id);
         }
         DPU_ASSERT(dpu_push_xfer(set,DPU_XFER_TO_DPU, "emb_buffer", 0, sizeof(struct embedding_buffer), DPU_XFER_DEFAULT));
 
@@ -183,7 +180,6 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
     This function updates ans with the elements of the rows that we have lookedup
 */
 int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uint64_t *offsets_len, int32_t *final_results){
-    printf("doing lookup\n");
     int dpu_id, tmp_ptr=0, table_ptr=0, indices_ptr=0, offsets_ptr=0, max_len=0;
     uint64_t copied_indices;
     struct dpu_set_t dpu;
@@ -213,11 +209,8 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
 
     // run dpus
     for( int k=0; k<allocated_ranks; k++){
-        printf("doing %d th rank\n",k);
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
-            printf("launching %d th dpu\n",dpu_id);
             DPU_ASSERT(dpu_launch(dpu, DPU_SYNCHRONOUS));
-            DPU_ASSERT(dpu_log_read(dpu, stdout));
         }
     }
     printf("DPUs done launching\n");

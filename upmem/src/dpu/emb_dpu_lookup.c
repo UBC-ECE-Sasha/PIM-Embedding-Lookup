@@ -26,7 +26,6 @@ main() {
     uint32_t last_row = table.last_row;
     uint64_t copied_indices=0;
 
-    printf("first_row in dpu=%d and last_row in dpu=%d\n",first_row, last_row);
     uint64_t nr_batches, indices_len;
     uint32_t indices_ptr=0;
     __dma_aligned uint32_t indices[32*MAX_NR_BATCHES], offsets[MAX_NR_BATCHES];
