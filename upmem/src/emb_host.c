@@ -2,6 +2,7 @@
 // --libs dpu` to build a shared library: gcc -shared -Wl,-soname,emb_host -o emblib.so -fPIC
 // emb_host.c `dpu-pkg-config --cflags --libs dpu`
 #include "common/include/common.h"
+#include "host/include/host.h"
 #include "emb_types.h"
 
 #include <assert.h>
@@ -13,6 +14,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
+#include <time.h>
 
 #ifndef DPU_BINARY
 #    define DPU_BINARY "../upmem/emb_dpu_lookup" // Relative path regarding the PyTorch code
@@ -23,6 +25,27 @@ uint32_t ready_to_alloc_buffs=0, done_dpus=0, allocated_ranks=0;
 struct embedding_buffer *buffers[MAX_NR_BUFFERS];
 struct embedding_table *tables[NR_TABLES];
 struct dpu_set_t dpu_ranks[AVAILABLE_RANKS];
+
+#define TIME_NOW(_t) (clock_gettime(CLOCK_MONOTONIC, (_t)))
+
+/**
+ * @struct dpu_runtime
+ * @brief DPU execution times
+ */
+/**
+ * @struct dpu_runtime
+ * @brief DPU execution times
+ */
+typedef struct dpu_runtime {
+    double execution_time_prepare;
+    double execution_time_populate_copy_in;
+    double execution_time_copy_in;
+    double execution_time_copy_out;
+    double execution_time_aggregate_result;
+    double execution_time_launch;
+} dpu_runtime;
+
+dpu_runtime runtime;
 
 static void enomem() {
     fprintf(stderr, "Out of memory\n");
@@ -57,7 +80,7 @@ static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_row
         buffers[total_buffers]->first_row = *first_row;
         buffers[total_buffers]->last_row = *last_row;
         buffers[total_buffers]->table_id = table_id;
-        
+
         size_t sz = (*last_row-*first_row+1)*NR_COLS*sizeof(int32_t);
         buffers[total_buffers]->data = malloc(ALIGN(sz,8));
         if (buffers[total_buffers]->data == NULL) {
@@ -88,10 +111,20 @@ static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_row
 */
 
 void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
+    struct timespec start, end;
     uint32_t first_row, last_row;
+
+    TIME_NOW(&start);
     if (alloc_buffers(table_id, table_data, nr_rows, &first_row, &last_row) != 0) {
         enomem();
     }
+    TIME_NOW(&end);
+
+    runtime.execution_time_prepare = TIME_DIFFERENCE(start, end);
+
+    printf("done with %dth table\n", table_id);
+
+    TIME_NOW(&start);
 
     // Done with analyzing all tables or nr ready_to_alloc_buffs enough for a rank so
     // allocate a rank and copy embedding data.
@@ -166,6 +199,14 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
         dpu_ranks[allocated_ranks] = set;
         allocated_ranks++;
     }
+    TIME_NOW(&end);
+
+    runtime.execution_time_populate_copy_in = TIME_DIFFERENCE(start, end);
+
+    dbg_printf("# Execution Times #\n");
+    dbg_printf("Populate Allocation: %fs\n", runtime.execution_time_prepare);
+    dbg_printf("Populate Copy in: %fs\n", runtime.execution_time_populate_copy_in);
+
     return;
 }
 
@@ -180,10 +221,13 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
     This function updates ans with the elements of the rows that we have lookedup
 */
 int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uint64_t *offsets_len, int32_t *final_results){
+    struct timespec start, end;
     int dpu_id, tmp_ptr=0, table_ptr=0, indices_ptr=0, offsets_ptr=0, max_len=0;
     uint64_t copied_indices;
     struct dpu_set_t dpu;
-    for( int k=0; k<allocated_ranks; k++){
+
+    TIME_NOW(&start);
+    for(int k=0; k<allocated_ranks; k++){
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
             if(tables[table_ptr]->nr_buffers==tmp_ptr){
                 if(indices_len[table_ptr]>max_len)
@@ -205,7 +249,13 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             tmp_ptr++;
         }
     }
-    //printf("done with lookup data copy\n");
+    TIME_NOW(&end);
+
+    runtime.execution_time_copy_in = TIME_DIFFERENCE(start, end);
+
+    printf("done with lookup data copy\n");
+
+    TIME_NOW(&start);
 
     // run dpus
     for( int k=0; k<allocated_ranks; k++){
@@ -213,8 +263,13 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             DPU_ASSERT(dpu_launch(dpu, DPU_SYNCHRONOUS));
         }
     }
-    //printf("DPUs done launching\n");
-    
+
+    TIME_NOW(&end);
+
+    runtime.execution_time_launch = TIME_DIFFERENCE(start, end);
+
+    TIME_NOW(&start);
+
     uint64_t nr_batches;
     struct lookup_result *partial_results[done_dpus];
     for( int k=0; k<allocated_ranks; k++){
@@ -224,7 +279,13 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             DPU_ASSERT(dpu_copy_from(dpu, "results", 0, &partial_results[dpu_id][0], ALIGN(sizeof(struct lookup_result)*nr_batches,8)));
         }
     }
-    //printf("Done with copying back results\n");
+
+    TIME_NOW(&end);
+
+    runtime.execution_time_copy_out = TIME_DIFFERENCE(start, end);
+
+    TIME_NOW(&start);
+
     int result_ptr=0, data_ptr=0;
     int32_t tmp_result[NR_COLS];
     for( int k=0; k<NR_TABLES; k++){
@@ -253,8 +314,17 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             }
             result_ptr+=tables[k]->nr_buffers;
         }
-    } 
-    //printf("done with lookup\n");
+    }
+
+    TIME_NOW(&end);
+
+    runtime.execution_time_aggregate_result = TIME_DIFFERENCE(start, end);
+
+    dbg_printf("# Execution Times #\n");
+    dbg_printf("Lookup Copy in: %fs\n", runtime.execution_time_populate_copy_in);
+    dbg_printf("Lookup Launch: %fs\n", runtime.execution_time_launch);
+    dbg_printf("Lookup Aggregate: %fs\n", runtime.execution_time_aggregate_result);
+
     return 0;
 }
 int
