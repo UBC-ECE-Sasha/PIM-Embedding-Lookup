@@ -32,20 +32,52 @@ struct dpu_set_t dpu_ranks[AVAILABLE_RANKS];
  * @struct dpu_runtime
  * @brief DPU execution times
  */
-/**
- * @struct dpu_runtime
- * @brief DPU execution times
- */
-typedef struct dpu_runtime {
+typedef struct dpu_runtime_totals {
     double execution_time_prepare;
     double execution_time_populate_copy_in;
     double execution_time_copy_in;
     double execution_time_copy_out;
     double execution_time_aggregate_result;
     double execution_time_launch;
-} dpu_runtime;
+} dpu_runtime_totals;
 
-dpu_runtime runtime;
+/**
+ * @struct dpu_timespec
+ * @brief ....
+ */
+typedef struct dpu_timespec {
+    long tv_nsec;
+    long tv_sec;
+} dpu_timespec;
+
+/**
+ * @struct dpu_runtime_interval
+ * @brief DPU execution interval
+ */
+typedef struct dpu_runtime_interval {
+    dpu_timespec start;
+    dpu_timespec stop;
+} dpu_runtime_interval;
+
+/**
+ * @struct dpu_runtime_config
+ * @brief ...
+ */
+typedef enum dpu_runtime_config {
+    RT_DEFAULT = 0,
+    RT_LAUNCH = 1
+} dpu_runtime_config;
+
+/**
+ * @struct dpu_runtime_group
+ * @brief ...
+ */
+typedef struct dpu_runtime_group {
+    unsigned int in_use;
+    unsigned int length;
+    dpu_runtime_interval *intervals;
+    dpu_runtime_config config;
+} dpu_runtime_group;
 
 static void enomem() {
     fprintf(stderr, "Out of memory\n");
@@ -110,7 +142,7 @@ static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_row
     corresponding table with the index of the first and last row held in each dpu.
 */
 
-void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
+void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu_runtime_totals *runtime){
     struct timespec start, end;
     uint32_t first_row, last_row;
 
@@ -120,7 +152,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
     }
     TIME_NOW(&end);
 
-    runtime.execution_time_prepare = TIME_DIFFERENCE(start, end);
+    if (runtime) runtime->execution_time_prepare += TIME_DIFFERENCE(start, end);
 
     printf("done with %dth table\n", table_id);
 
@@ -201,11 +233,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
     }
     TIME_NOW(&end);
 
-    runtime.execution_time_populate_copy_in = TIME_DIFFERENCE(start, end);
-
-    dbg_printf("# Execution Times #\n");
-    dbg_printf("Populate Allocation: %fs\n", runtime.execution_time_prepare);
-    dbg_printf("Populate Copy in: %fs\n", runtime.execution_time_populate_copy_in);
+    if (runtime) runtime->execution_time_populate_copy_in += TIME_DIFFERENCE(start, end);
 
     return;
 }
@@ -220,7 +248,9 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
     Result:
     This function updates ans with the elements of the rows that we have lookedup
 */
-int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uint64_t *offsets_len, int32_t *final_results){
+int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len,
+                uint64_t *offsets_len, int32_t *final_results,
+                dpu_runtime_group *runtime_group){
     struct timespec start, end;
     int dpu_id, tmp_ptr=0, table_ptr=0, indices_ptr=0, offsets_ptr=0, max_len=0;
     uint64_t copied_indices;
@@ -239,7 +269,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             }
             copied_indices=0;
             while(copied_indices<indices_len[table_ptr]){
-                DPU_ASSERT(dpu_copy_to(dpu, "input_indices" , copied_indices*sizeof(uint32_t), (const uint32_t *)&indices[indices_ptr+copied_indices], 
+                DPU_ASSERT(dpu_copy_to(dpu, "input_indices" , copied_indices*sizeof(uint32_t), (const uint32_t *)&indices[indices_ptr+copied_indices],
                 ALIGN(MIN(2048,(indices_len[table_ptr]-copied_indices)*sizeof(uint32_t)),8)));
                 copied_indices+=2048/sizeof(uint32_t);
             }
@@ -249,13 +279,6 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             tmp_ptr++;
         }
     }
-    TIME_NOW(&end);
-
-    runtime.execution_time_copy_in = TIME_DIFFERENCE(start, end);
-
-    printf("done with lookup data copy\n");
-
-    TIME_NOW(&start);
 
     // run dpus
     for( int k=0; k<allocated_ranks; k++){
@@ -264,12 +287,6 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
         }
     }
 
-    TIME_NOW(&end);
-
-    runtime.execution_time_launch = TIME_DIFFERENCE(start, end);
-
-    TIME_NOW(&start);
-
     uint64_t nr_batches;
     struct lookup_result *partial_results[done_dpus];
     for( int k=0; k<allocated_ranks; k++){
@@ -277,14 +294,24 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             DPU_ASSERT(dpu_copy_from(dpu, "input_nr_offsets", 0 , &nr_batches, sizeof(uint64_t)));
             partial_results[dpu_id]=malloc(sizeof(struct lookup_result)*nr_batches);
             DPU_ASSERT(dpu_copy_from(dpu, "results", 0, &partial_results[dpu_id][0], ALIGN(sizeof(struct lookup_result)*nr_batches,8)));
+            TIME_NOW(&end);
+
+            if (runtime_group) {
+                if(runtime_group[dpu_id].in_use >= runtime_group[dpu_id].length) {
+                    fprintf(stderr,
+                        "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
+                        dpu_id, runtime_group[dpu_id].in_use, dpu_id, runtime_group[dpu_id].length);
+                    exit(1);
+                }
+                /* Explicitly set to avoid struct order and size issues in python */
+                runtime_group[dpu_id].intervals[runtime_group[dpu_id].in_use].start.tv_nsec = start.tv_nsec;
+                runtime_group[dpu_id].intervals[runtime_group[dpu_id].in_use].start.tv_sec = start.tv_sec;
+                runtime_group[dpu_id].intervals[runtime_group[dpu_id].in_use].stop.tv_nsec = end.tv_nsec;
+                runtime_group[dpu_id].intervals[runtime_group[dpu_id].in_use].stop.tv_sec = end.tv_sec;
+                runtime_group[dpu_id].in_use++;
+            }
         }
     }
-
-    TIME_NOW(&end);
-
-    runtime.execution_time_copy_out = TIME_DIFFERENCE(start, end);
-
-    TIME_NOW(&start);
 
     int result_ptr=0, data_ptr=0;
     int32_t tmp_result[NR_COLS];
@@ -315,15 +342,6 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             result_ptr+=tables[k]->nr_buffers;
         }
     }
-
-    TIME_NOW(&end);
-
-    runtime.execution_time_aggregate_result = TIME_DIFFERENCE(start, end);
-
-    dbg_printf("# Execution Times #\n");
-    dbg_printf("Lookup Copy in: %fs\n", runtime.execution_time_populate_copy_in);
-    dbg_printf("Lookup Launch: %fs\n", runtime.execution_time_launch);
-    dbg_printf("Lookup Aggregate: %fs\n", runtime.execution_time_aggregate_result);
 
     return 0;
 }
