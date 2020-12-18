@@ -61,6 +61,8 @@ def lookup(config):
 
     runtimes_init = [DpuRuntimeGroup(length=8)] * num_dpu
     rg = (DpuRuntimeGroup * num_dpu)(*runtimes_init)
+    for e in rg:
+        print(e)
     for _ in range(8):
         my_functions.lookup(indices_ptr, offsets_ptr, indices_len_ptr, offsets_len_ptr, ans, rg)
 

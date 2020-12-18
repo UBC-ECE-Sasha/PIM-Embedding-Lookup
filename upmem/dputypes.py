@@ -12,7 +12,7 @@ class CtypesEnum(IntEnum):
 
 class DpuRuntimeConfigEnum(CtypesEnum):
     """ctypes compatible dpu_runtime_config struct"""
-    RT_DEFAULT = 0
+    RT_ALL = 0
     RT_LAUNCH = 1
 
 class DpuTimespec(Structure):
@@ -50,21 +50,19 @@ class DpuRuntimeGroup(Structure):
         ('in_use', c_uint),
         ('length', c_uint),
         # Array of dpu_runtime_interval
-        ('intervals', POINTER(DpuRuntimeInterval)),
-        # enum (can't use python enum in _fields_)
-        ('config', c_int)
+        ('intervals', POINTER(DpuRuntimeInterval))
     ]
 
-    def __init__(self, in_use=0, length=4, values=None, config=DpuRuntimeConfigEnum.RT_DEFAULT):
+    def __init__(self, in_use=0, length=4, values=None):
         if values is None:
             v = (DpuRuntimeInterval * length)()
         else:
             v = values
-        super(DpuRuntimeGroup, self).__init__(in_use, length, v, config)
+        super(DpuRuntimeGroup, self).__init__(in_use, length, v)
 
 
     def __repr__(self):
-        return f"({self.in_use=}, {self.length=}, {self.intervals=}, {self.config=})"
+        return f"({self.in_use=}, {self.length=}, {self.intervals=})"
 
 class DpuRuntimeTotals(Structure):
     """ctypes compatible dpu_runtime_interval struct"""
