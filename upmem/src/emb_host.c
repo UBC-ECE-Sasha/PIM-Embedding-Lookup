@@ -298,26 +298,29 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len,
 
     // run dpus
     for( int k=0; k<allocated_ranks; k++){
+
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
             if (runtime_group && RT_CONFIG == RT_LAUNCH) TIME_NOW(&start);
-            DPU_ASSERT(dpu_launch(dpu, DPU_SYNCHRONOUS));
-                if (runtime_group && RT_CONFIG == RT_LAUNCH) {
-                    for (int i = 0; i < NR_DPUS; i++) {
-                        printf("runtime_group[%d].in_use = %d, runtime_group[%d].length = %d\n",
-                        i, runtime_group[i].in_use, i, runtime_group[i].in_use);
-                    }
 
-                    if(runtime_group[dpu_id].in_use >= runtime_group[dpu_id].length) {
-                        TIME_NOW(&end);
-                        fprintf(stderr,
-                            "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
-                            dpu_id, runtime_group[dpu_id].in_use, dpu_id, runtime_group[dpu_id].length);
-                        exit(1);
-                    }
-                    copy_interval(
-                        &runtime_group->intervals[runtime_group[dpu_id].in_use], &start, &end);
-                        runtime_group[dpu_id].in_use++;
+            DPU_ASSERT(dpu_launch(dpu, DPU_SYNCHRONOUS));
+
+            if (runtime_group && RT_CONFIG == RT_LAUNCH) {
+                for (int i = 0; i < NR_DPUS; i++) {
+                    printf("runtime_group[%d].in_use = %d, runtime_group[%d].length = %d\n",
+                    i, runtime_group[i].in_use, i, runtime_group[i].in_use);
                 }
+
+                if(runtime_group[dpu_id].in_use >= runtime_group[dpu_id].length) {
+                    TIME_NOW(&end);
+                    fprintf(stderr,
+                        "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
+                        dpu_id, runtime_group[dpu_id].in_use, dpu_id, runtime_group[dpu_id].length);
+                    exit(1);
+                }
+                copy_interval(
+                    &runtime_group->intervals[runtime_group[dpu_id].in_use], &start, &end);
+                    runtime_group[dpu_id].in_use++;
+            }
         }
     }
 
