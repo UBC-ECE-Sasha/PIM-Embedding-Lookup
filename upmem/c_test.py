@@ -7,14 +7,14 @@ from dputypes import *
 # DEFAULTS #
 so_file = None
 my_functions = None
-num_dpu=8
+num_dpu=12
 num_batches=32
 
 # Defaults, can be overriden by cli arguments
 if __name__ != "__main__":
     so_file = "./emblib.so"
     my_functions = CDLL(os.path.abspath(so_file))
-    num_dpu=8
+    num_dpu=12
     num_batches= 32
 
 
@@ -26,7 +26,7 @@ def parse():
     parser.add_argument(
         "--num_dpu", help="Input number of DPUs", default=num_dpu, type=int)
     parser.add_argument(
-        "--runtimes", help="Report runtimes", default=True, type=bool)
+        "--runtimes", help="Report runtimes", default=False, type=bool)
     parser.add_argument(
         "--runtime_file", help="Runtime CSV report", default='runtimes.csv', type=str)
 
@@ -61,12 +61,11 @@ def lookup(config, runtime_group=None):
     offsets_len_ptr=(c_uint64 * len(offsets_len))(*offsets_len)
     ans=(c_int32 * (num_batches*6*config.num_dpu))()
 
-    for e in runtime_group:
-        print(e)
     for _ in range(8):
         my_functions.lookup(indices_ptr, offsets_ptr, indices_len_ptr, offsets_len_ptr, ans, runtime_group)
 
-    write_results(config, runtime_group)
+    if runtime_group is not None:
+        write_results(config, runtime_group)
 
 
 if __name__ == "__main__":

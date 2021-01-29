@@ -244,7 +244,6 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
     TIME_NOW(&end);
 
     if (runtime) runtime->execution_time_populate_copy_in += TIME_DIFFERENCE(start, end);
-
     return;
 }
 
@@ -265,11 +264,6 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len,
     int dpu_id, tmp_ptr=0, table_ptr=0, indices_ptr=0, offsets_ptr=0, max_len=0;
     uint64_t copied_indices;
     struct dpu_set_t dpu;
-
-    for (int i = 0; i < NR_DPUS; i++) {
-        printf("INIT: runtime_group[%d].in_use = %d, runtime_group[%d].length = %d\n",
-        i, runtime_group[i].in_use, i, runtime_group[i].in_use);
-    }
 
     if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
 
@@ -300,16 +294,12 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len,
     for( int k=0; k<allocated_ranks; k++){
 
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
+
             if (runtime_group && RT_CONFIG == RT_LAUNCH) TIME_NOW(&start);
 
             DPU_ASSERT(dpu_launch(dpu, DPU_SYNCHRONOUS));
 
             if (runtime_group && RT_CONFIG == RT_LAUNCH) {
-                for (int i = 0; i < NR_DPUS; i++) {
-                    printf("runtime_group[%d].in_use = %d, runtime_group[%d].length = %d\n",
-                    i, runtime_group[i].in_use, i, runtime_group[i].in_use);
-                }
-
                 if(runtime_group[dpu_id].in_use >= runtime_group[dpu_id].length) {
                     TIME_NOW(&end);
                     fprintf(stderr,
