@@ -89,7 +89,7 @@ static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_row
 
 void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
     uint32_t first_row, last_row;
-    printf("Started populating\n");
+    //printf("Started populating\n");
     if (alloc_buffers(table_id, table_data, nr_rows, &first_row, &last_row) != 0) {
         enomem();
     }
@@ -167,7 +167,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
         dpu_ranks[allocated_ranks] = set;
         allocated_ranks++;
     }
-    printf("Done with populating\n");
+    //printf("Done with populating\n");
     return;
 }
 
@@ -182,7 +182,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
     This function updates ans with the elements of the rows that we have lookedup
 */
 int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uint64_t *offsets_len, int32_t *final_results){
-    printf("Starting lookup\n");
+    //printf("Starting lookup\n");
     int dpu_id, tmp_ptr=0, table_ptr=0, indices_ptr=0, offsets_ptr=0, max_len=0;
     uint64_t copied_indices;
     struct dpu_set_t dpu;
@@ -208,16 +208,16 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             tmp_ptr++;
         }
     }
-    //printf("done with lookup data copy\n");
+    printf("done with lookup data copy\n");
 
     // run dpus
     for( int k=0; k<allocated_ranks; k++){
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
-            printf("Launching %dth dpu\n",dpu_id);
+            //printf("Launching %dth dpu\n",dpu_id);
             uint64_t tmp_int=1;
             DPU_ASSERT(dpu_copy_to(dpu, "first_run" , 0, &tmp_int, sizeof(uint64_t)));
             DPU_ASSERT(dpu_launch(dpu, DPU_SYNCHRONOUS));
-            DPU_ASSERT(dpu_log_read(dpu, stdout));
+            //DPU_ASSERT(dpu_log_read(dpu, stdout));
         }
     }
     //printf("DPUs done launching\n");
@@ -263,7 +263,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
         }
 
     }
-    printf("done with lookup\n");
+    //printf("done with lookup\n");
     return 0;
 }
 int
