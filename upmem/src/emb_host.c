@@ -208,7 +208,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len, uin
             tmp_ptr++;
         }
     }
-    printf("done with lookup data copy\n");
+    //printf("done with lookup data copy\n");
 
     // run dpus
     for( int k=0; k<allocated_ranks; k++){
