@@ -7,14 +7,9 @@ from dputypes import *
 # DEFAULTS #
 so_file = None
 my_functions = None
-<<<<<<< HEAD
-num_dpu= 8
-num_batches= 1
-=======
 num_dpu=12
 num_batches=32
 
->>>>>>> 68b3e61abf32f984bd8f5ffb326269e51f2917eb
 # Defaults, can be overriden by cli arguments
 if __name__ != "__main__":
     so_file = "./emblib.so"

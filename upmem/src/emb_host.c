@@ -188,30 +188,6 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
         }
         DPU_ASSERT(dpu_push_xfer(set,DPU_XFER_TO_DPU, "emb_buffer", 0, sizeof(struct embedding_buffer), DPU_XFER_DEFAULT));
 
-        // This section is just for testing, see if correct values are in DPU
-        /* int32_t ans[4];
-        DPU_FOREACH(set, dpu, dpu_id){
-            dpu_launch(dpu, DPU_SYNCHRONOUS);
-            first_row=buffers[done_dpus+dpu_id]->first_row;
-            last_row=buffers[done_dpus+dpu_id]->last_row;
-            printf("In host last_row:%d, first row:%d & NR_COLS:%d\n",last_row,first_row,NR_COLS);
-            printf("first: %d, 2nd: %d, -1: %d, last: %dfor %d buffer\n",buffers[dpu_id]->data[0],
-            buffers[dpu_id]->data[1],
-            buffers[dpu_id]->data[(last_row-first_row+1)*NR_COLS-2],
-            buffers[dpu_id]->data[(last_row-first_row+1)*NR_COLS-1],dpu_id);
-            uint32_t offset=
-            ALIGN((last_row-first_row+1)*NR_COLS*sizeof(int32_t),8);
-            printf("copying from dpu\n");
-            DPU_ASSERT(dpu_copy_from(dpu, "ans_buffer", 0 , (int32_t*)ans, 2*sizeof(int32_t)));
-            printf("copied from dpu\n");
-            printf("%d: %d, %d\n",dpu_id,ans[0], ans[1]);
-            printf("reading log\n");
-            DPU_ASSERT(dpu_log_read(dpu, stdout));
-            printf("log read for dpu %dth\n",dpu_id);
-            printf("------------------------------------------\n");
-            //printf("log printed");
-        } */
-
         for (int i = done_dpus; i < ready_to_alloc_buffs; i++)
             free(buffers[i]->data);
 
@@ -244,6 +220,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
     TIME_NOW(&end);
 
     if (runtime) runtime->execution_time_populate_copy_in += TIME_DIFFERENCE(start, end);
+    printf("Done populating\n");
     return;
 }
 

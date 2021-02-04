@@ -4,12 +4,7 @@ PROJECT             = emb_host
 PROJECT_LIB         = emblib.so
 EXE_DPU             ?= emb_dpu_lookup
 BUILD_DIR           ?= build
-<<<<<<< HEAD
-NR_DPUS             ?= 32
-NR_TASKLETS         ?= 14
-=======
 NR_TASKLETS         ?= 1
->>>>>>> 68b3e61abf32f984bd8f5ffb326269e51f2917eb
 COUNTER_CONFIG      ?= "COUNT_CYCLES"
 SHOW_DPU_LOGS       ?= 1
 MAX_ENC_BUFFER_MB   ?= 1
