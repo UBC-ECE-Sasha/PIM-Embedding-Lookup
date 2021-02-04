@@ -5,7 +5,7 @@ from ctypes import *
 so_file = None
 my_functions = None
 num_dpu= 8
-num_batches= 32
+num_batches= 1
 # Defaults, can be overriden by cli arguments
 if __name__ != "__main__":
     so_file = "./emblib.so"

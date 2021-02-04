@@ -84,12 +84,12 @@ all: $(DEFAULT_TARGET)
 ##############################################################################################
 $(DEFAULT_TARGET): $(APP_OBJS)
 	$(SHOW_CC) $@
-	$(SILENCE)$(CC) -o $@ $(APP_OBJS) $(DPU_OPTS)
+	$(SILENCE)$(CC) $(CFLAGS) -o $@ $(APP_OBJS) $(DPU_OPTS)
 
 $(BUILD_DIR)/%.o: %.c
 	$(SHOW_CC) $@
 	$(SILENCE)mkdir -p $(dir $@)
-	$(SILENCE)$(CC) $(CFLAGS) $(INC) -c $< -o $@ $(DPU_OPTS)
+	$(CC) $(CFLAGS) $(INC) -c $< -o $@ $(DPU_OPTS)
 
 ##############################################################################################
 # Format
