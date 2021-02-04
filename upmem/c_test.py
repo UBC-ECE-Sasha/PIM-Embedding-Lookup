@@ -7,14 +7,14 @@ from dputypes import *
 # DEFAULTS #
 so_file = None
 my_functions = None
-num_dpu=12
+num_dpu=8
 num_batches=32
 
 # Defaults, can be overriden by cli arguments
 if __name__ != "__main__":
     so_file = "./emblib.so"
     my_functions = CDLL(os.path.abspath(so_file))
-    num_dpu=12
+    num_dpu=8
     num_batches= 32
 
 
