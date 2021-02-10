@@ -11,14 +11,17 @@ SHOW_DPU_LOGS       ?= 1
 MAX_ENC_BUFFER_MB   ?= 1
 NR_TABLES           ?= 8
 MAX_NR_BATCHES      ?= 32
+RT_CONFIG           ?= "ALL"
 
 # TEST with c_test.py
 DPU_TEST            ?= 0
 
 ifeq ($(DPU_TEST),1)
   NR_COLS             ?= 6
+  NR_DPUS             = 8
 else
   NR_COLS             ?= 16
+  NR_DPUS             ?= 32
 endif
 
 # Version information

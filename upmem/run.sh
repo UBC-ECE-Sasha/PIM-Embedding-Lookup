@@ -72,7 +72,7 @@ kaggle_run() {
 }
 
 random_run() {
-    python "${cwd}/../dlrm/dlrm_dpu_pytorch.py" \
+    python3 "${cwd}/../dlrm/dlrm_dpu_pytorch.py" \
            --arch-embedding-size=65000-65000-65000-65000-65000-65000-65000-65000-65000-65000-65000-65000 \
            --arch-sparse-feature-size=64 \
            --arch-mlp-bot=1440-720-64 \
@@ -86,6 +86,7 @@ random_run() {
 }
 
 toy_run() {
+    echo "DPU_TEST=${DPU_TEST}"
     python3 "${cwd}/c_test.py"
 }
 
