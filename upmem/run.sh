@@ -41,6 +41,7 @@ random_env() {
     export NR_TABLES=12
     export NR_COLS=64
     export MAX_NR_BATCHES=128
+    export NR_TASKLETS=14
 }
 
 toy_env() {

@@ -3,7 +3,7 @@ from matplotlib import collections as mc
 import pandas as pd
 
 file = "runtimes.csv"
-colors = "bgrcmykw"
+colors = "bgrcmykwbgrcmykw"
 
 def main():
     data = pd.read_csv(file)

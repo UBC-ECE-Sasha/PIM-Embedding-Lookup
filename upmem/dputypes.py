@@ -29,7 +29,7 @@ class DpuTimespec(Structure):
         return ((self.tv_sec * 1000) + (self.tv_nsec / 10E-6)) - offset
 
     def __repr__(self):
-        return f"({self.tv_sec=}, {self.tv_nsec=} (as_ms={self.as_ms()}))"
+        return f"(tv_sec={self.tv_sec}, tv_nsec={self.tv_nsec} (as_ms={self.as_ms()}))"
 
 class DpuRuntimeInterval(Structure):
     """ctypes compatible dpu_runtime_interval struct"""
@@ -42,7 +42,7 @@ class DpuRuntimeInterval(Structure):
         super(DpuRuntimeInterval, self).__init__(DpuTimespec(), DpuTimespec())
 
     def __repr__(self):
-        return f"({self.start=}, {self.stop=})"
+        return f"(start={self.start}, stop={self.stop})"
 
 class DpuRuntimeGroup(Structure):
     """ctypes compatible dpu_runtime_group struct"""
@@ -62,7 +62,7 @@ class DpuRuntimeGroup(Structure):
 
 
     def __repr__(self):
-        return f"({self.in_use=}, {self.length=}, {self.intervals=})"
+        return f"(in_use={self.in_use}, length={self.length}, intervals={self.intervals})"
 
 class DpuRuntimeTotals(Structure):
     """ctypes compatible dpu_runtime_interval struct"""
@@ -88,7 +88,7 @@ def write_results(config, runtime_group, headers=["DPU", "Start", "Stop"]):
     if not config.runtimes:
         return
 
-    with open(config.runtime_file, 'w') as csvfile:
+    with open(config.runtime_file, 'a') as csvfile:
         rtwriter = csv.writer(csvfile, delimiter=',',
                             quotechar='"', quoting=csv.QUOTE_MINIMAL)
         if headers is not None and len(headers) > 0:

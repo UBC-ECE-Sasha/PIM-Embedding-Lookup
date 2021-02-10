@@ -26,9 +26,9 @@ def parse():
     parser.add_argument(
         "--num_dpu", help="Input number of DPUs", default=num_dpu, type=int)
     parser.add_argument(
-        "--runtimes", help="Report runtimes", default=False, type=bool)
+        "--runtimes", help="Report runtimes", default=True, type=bool)
     parser.add_argument(
-        "--runtime_file", help="Runtime CSV report", default='runtimes.csv', type=str)
+        "--runtime_file", help="Runtime CSV report", default='toy_runtimes.csv', type=str)
 
     return parser.parse_args()
 
