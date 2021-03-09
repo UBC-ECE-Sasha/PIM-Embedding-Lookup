@@ -26,7 +26,7 @@ class DpuTimespec(Structure):
         super(DpuTimespec, self).__init__(tv_nsec, tv_sec)
 
     def as_ms(self, offset=0):
-        return ((self.tv_sec * 1000) + (self.tv_nsec / 10E+6)) - offset
+        return ((self.tv_sec * 1000) + (self.tv_nsec / 1E+6)) - offset
 
     def __repr__(self):
         return f"(tv_sec={self.tv_sec}, tv_nsec={self.tv_nsec} (as_ms={self.as_ms()}))"
