@@ -42,7 +42,8 @@ random_env() {
     export NR_TABLES=12
     export NR_COLS=64
     export MAX_NR_BATCHES=128
-    export NR_TASKLETS=14
+    export MAX_INDICE_PER_OP=32
+    export NR_TASKLETS=16
 }
 
 toy_env() {
@@ -79,7 +80,7 @@ random_run() {
            --arch-mlp-top=40-20-10-1 \
            --data-generation=random \
            --mini-batch-size=128 \
-           --num-batches=10 \
+           --num-batches=100 \
            --num-indices-per-lookup=32 \
            --num-indices-per-lookup-fixed=True \
            --inference-only

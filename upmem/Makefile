@@ -11,6 +11,7 @@ SHOW_DPU_LOGS       ?= 1
 MAX_ENC_BUFFER_MB   ?= 1
 NR_TABLES           ?= 8
 MAX_NR_BATCHES      ?= 32
+MAX_INDICE_PER_OP   ?= 32
 RT_CONFIG           ?= "ALL"
 
 # TEST with c_test.py
@@ -72,6 +73,7 @@ CFLAGS              += $(COMMON_CFLAGS) \
                        -DNR_TABLES=$(NR_TABLES) \
                        -DNR_COLS=$(NR_COLS) \
                        -DMAX_NR_BATCHES=$(MAX_NR_BATCHES) \
+                       -DMAX_INDICE_PER_OP=$(MAX_INDICE_PER_OP) \
                        -DHOST=1 \
                        -DDPU_BINARY=\"dpu/$(EXE_DPU)\" \
                        -DMAX_ENC_BUFFER_MB="$(MAX_ENC_BUFFER_MB)" \
@@ -137,6 +139,7 @@ export EXE_DPU
 export NR_TABLES
 export NR_COLS
 export MAX_NR_BATCHES
+export MAX_INDICE_PER_OP
 
 dpu:
 	$(SHOW_MAKE) $@

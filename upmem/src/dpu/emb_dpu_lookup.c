@@ -11,8 +11,7 @@
 #include <sem.h>
 
 __mram_noinit struct embedding_buffer emb_buffer;
-__mram_noinit uint64_t input_nr_indices;
-__mram_noinit uint64_t input_nr_offsets;
+__mram_noinit struct lookup_query input_query;
 
 __mram_noinit int32_t emb_data[MEGABYTE(14)];
 __mram_noinit uint32_t input_indices[32*MAX_NR_BATCHES];
@@ -26,6 +25,7 @@ struct embedding_buffer table;
 SEMAPHORE_INIT(first_run_sem,1);
 SEMAPHORE_INIT(result_sem,1);
 
+__dma_aligned struct lookup_query query;
 uint64_t nr_batches, indices_len, copied_indices;
 __dma_aligned uint32_t indices[32*MAX_NR_BATCHES], offsets[MAX_NR_BATCHES];
 
@@ -40,8 +40,9 @@ main() {
         first_row = table.first_row;
         last_row = table.last_row;
 
-        mram_read(&input_nr_indices, &indices_len, sizeof(uint64_t));
-        mram_read(&input_nr_offsets, &nr_batches, sizeof(uint64_t));
+        mram_read(&input_query, &query, sizeof(struct lookup_query));
+        nr_batches=query.nr_offsets;
+        indices_len=query.nr_indices;
 
         while(copied_indices<indices_len){
             mram_read(&input_indices[copied_indices],&indices[copied_indices],

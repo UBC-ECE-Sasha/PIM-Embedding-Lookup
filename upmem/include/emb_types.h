@@ -25,3 +25,9 @@ struct lookup_result {
     uint32_t id;
     bool is_complete;
 };
+
+struct lookup_query {
+    uint32_t nr_indices, nr_offsets;
+    uint32_t offsets[MAX_NR_BATCHES],
+    indices[MAX_NR_BATCHES*MAX_INDICE_PER_OP];
+};

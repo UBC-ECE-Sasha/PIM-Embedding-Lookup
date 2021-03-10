@@ -16,7 +16,7 @@
 #include <errno.h>
 #include <time.h>
 
-#define RT_CONFIG 0
+#define RT_CONFIG 2
 
 #ifndef DPU_BINARY
 #    define DPU_BINARY "../upmem/emb_dpu_lookup" // Relative path regarding the PyTorch code
@@ -67,7 +67,8 @@ typedef struct dpu_runtime_interval {
  */
 typedef enum dpu_runtime_config {
     RT_ALL = 0,
-    RT_LAUNCH = 1
+    RT_LAUNCH = 1,
+    RT_COPY = 2,
 } dpu_runtime_config;
 
 /**
@@ -233,8 +234,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
     Result:
     This function updates ans with the elements of the rows that we have lookedup
 */
-int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len,
-                uint64_t *offsets_len, int32_t *final_results,
+int32_t* lookup(lookup_query* queries, int32_t *final_results,
                 dpu_runtime_group *runtime_group){
     struct timespec start, end;
     int dpu_id, tmp_ptr=0, table_ptr=0, indices_ptr=0, offsets_ptr=0, max_len=0;
@@ -242,69 +242,88 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len,
     struct dpu_set_t dpu;
 
     if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
-
+ 
     for(int k=0; k<allocated_ranks; k++){
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
+
+            if (runtime_group && RT_CONFIG == RT_COPY) TIME_NOW(&start); 
+
             if(tables[table_ptr]->nr_buffers==tmp_ptr){
-                if(indices_len[table_ptr]>max_len)
-                    max_len=indices_len[table_ptr];
+                if(queries[table_ptr].nr_indices>max_len)
+                    max_len=queries[table_ptr].nr_indices;
                 tmp_ptr=0;
-                indices_ptr+=indices_len[table_ptr];
-                offsets_ptr+=offsets_len[table_ptr];
+                indices_ptr+=queries[table_ptr].nr_indices;
+                offsets_ptr+=queries[table_ptr].nr_offsets;
                 table_ptr++;
             }
-            copied_indices=0;
-            while(copied_indices<indices_len[table_ptr]){
-                DPU_ASSERT(dpu_copy_to(dpu, "input_indices" , copied_indices*sizeof(uint32_t), (const uint32_t *)&indices[indices_ptr+copied_indices],
+            /* copied_indices=0;
+            while(copied_indices<queries[table_ptr].nr_indices){
+                DPU_ASSERT(dpu_copy_to(dpu, "input_indices" , copied_indices*sizeof(uint32_t), 
+                (const uint32_t *)&indices[indices_ptr+copied_indices],
                 ALIGN(MIN(2048,(indices_len[table_ptr]-copied_indices)*sizeof(uint32_t)),8)));
                 copied_indices+=2048/sizeof(uint32_t);
-            }
-            DPU_ASSERT(dpu_copy_to(dpu, "input_offsets" , 0, (const uint32_t *)&offsets[offsets_ptr], ALIGN(offsets_len[table_ptr]*sizeof(uint32_t),8)));
-            DPU_ASSERT(dpu_copy_to(dpu, "input_nr_indices" , 0, &indices_len[table_ptr], sizeof(uint64_t)));
-            DPU_ASSERT(dpu_copy_to(dpu, "input_nr_offsets" , 0, &offsets_len[table_ptr], sizeof(uint64_t)));
+            } */
+
+            DPU_ASSERT(dpu_copy_to(dpu, "input_queries" , 0, (const lookup_query *)&queries[table_ptr], 
+            ALIGN(offsets_len[table_ptr]*sizeof(uint32_t),8)));
+            struct lookup_query tmp_query;
+            tmp_query.nr_indices=indices_len[table_ptr];
+            tmp_query.nr_offsets=offsets_len[table_ptr];
+            //&(tmp_query.offsets[0])=&offsets[offsets_ptr];
+            DPU_ASSERT(dpu_prepare_xfer(dpu, &tmp_query));
             tmp_ptr++;
+        }
+        DPU_ASSERT(dpu_push_xfer(dpu_ranks[k], DPU_XFER_TO_DPU, "input_query", 0, 
+        sizeof(struct lookup_query), DPU_XFER_DEFAULT));
+
+        if (runtime_group && RT_CONFIG == RT_COPY) {
+            if(runtime_group[dpu_id].in_use >= runtime_group[dpu_id].length) {
+                TIME_NOW(&end);
+                fprintf(stderr,
+                    "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
+                    dpu_id, runtime_group[dpu_id].in_use, dpu_id, runtime_group[dpu_id].length);
+                exit(1);
+            }
+            copy_interval(
+                &runtime_group->intervals[runtime_group[dpu_id].in_use], &start, &end);
+                runtime_group[dpu_id].in_use++;
         }
     }
 
     // run dpus
     for( int k=0; k<allocated_ranks; k++){
+        uint64_t tmp_int=1;
+        DPU_ASSERT(dpu_copy_to(dpu_ranks[k], "first_run" , 0, &tmp_int, sizeof(uint64_t)));
 
-        DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
+        if (runtime_group && RT_CONFIG == RT_LAUNCH) TIME_NOW(&start);   
+        DPU_ASSERT(dpu_launch(dpu_ranks[k], DPU_SYNCHRONOUS));
 
-            if (runtime_group && RT_CONFIG == RT_LAUNCH) TIME_NOW(&start);
-            
-            uint64_t tmp_int=1;
-            DPU_ASSERT(dpu_copy_to(dpu, "first_run" , 0, &tmp_int, sizeof(uint64_t)));
-            DPU_ASSERT(dpu_launch(dpu, DPU_SYNCHRONOUS));
-
-            if (runtime_group && RT_CONFIG == RT_LAUNCH) {
-                if(runtime_group[dpu_id].in_use >= runtime_group[dpu_id].length) {
-                    TIME_NOW(&end);
-                    fprintf(stderr,
-                        "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
-                        dpu_id, runtime_group[dpu_id].in_use, dpu_id, runtime_group[dpu_id].length);
-                    exit(1);
-                }
-                copy_interval(
-                    &runtime_group->intervals[runtime_group[dpu_id].in_use], &start, &end);
-                    runtime_group[dpu_id].in_use++;
+        if (runtime_group && RT_CONFIG == RT_LAUNCH) {
+            if(runtime_group[dpu_id].in_use >= runtime_group[dpu_id].length) {
+                TIME_NOW(&end);
+                fprintf(stderr,
+                    "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
+                    dpu_id, runtime_group[dpu_id].in_use, dpu_id, runtime_group[dpu_id].length);
+                exit(1);
             }
+            copy_interval(
+                &runtime_group->intervals[runtime_group[dpu_id].in_use], &start, &end);
+                runtime_group[dpu_id].in_use++;
         }
+        
     }
 
-    uint64_t nr_batches;
+    struct lookup_query dpu_query;
+    uint32_t nr_batches;
     struct lookup_result *partial_results[done_dpus];
     for( int k=0; k<allocated_ranks; k++){
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
-            DPU_ASSERT(dpu_copy_from(dpu, "input_nr_offsets", 0 , &nr_batches, sizeof(uint64_t)));
+            DPU_ASSERT(dpu_copy_from(dpu, "input_query", 0 , &dpu_query, sizeof(struct lookup_query)));
+            nr_batches=dpu_query.nr_offsets;
             partial_results[dpu_id]=malloc(sizeof(struct lookup_result)*nr_batches);
             DPU_ASSERT(dpu_copy_from(dpu, "results", 0, &partial_results[dpu_id][0], ALIGN(sizeof(struct lookup_result)*nr_batches,8)));
 
             if (runtime_group && RT_CONFIG == RT_ALL) {
-                for (int i = 0; i < NR_DPUS; i++) {
-                    printf("runtime_group[%d].in_use = %d, runtime_group[%d].length = %d\n",
-                    i, runtime_group[i].in_use, i, runtime_group[i].in_use);
-                }
                 TIME_NOW(&end);
                 if(runtime_group[dpu_id].in_use >= runtime_group[dpu_id].length) {
                     fprintf(stderr,

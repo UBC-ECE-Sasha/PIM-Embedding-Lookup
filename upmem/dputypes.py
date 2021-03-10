@@ -4,6 +4,14 @@ from enum import IntEnum
 
 ## ctypes ##
 
+class LookupQuery(Structure):
+    _fields_ = [
+        ("nr_indices",c_uint32),
+        ("nr_offsets",c_uint32),
+        ("offsets",POINTER(c_uint32)),
+        ("indices",POINTER(c_uint32))
+    ]
+
 class CtypesEnum(IntEnum):
     """ctypes semi-compatible IntEnum superclass."""
     @classmethod
