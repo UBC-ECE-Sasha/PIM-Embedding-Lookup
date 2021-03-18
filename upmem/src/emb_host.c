@@ -270,6 +270,11 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len,
         }
     }
 
+    if (runtime_group && RT_CONFIG == RT_COPY_TO) {
+        dbg_printf("%s", "STOP - RT_CONFIG == RT_COPY_TO\n");
+        TIME_NOW(&end);
+    }
+
     // run dpus
     for( int k=0; k<allocated_ranks; k++){
 
@@ -298,11 +303,6 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len,
                     runtime_group[dpu_id].in_use++;
             }
         }
-    }
-
-    if (runtime_group && RT_CONFIG == RT_COPY_TO) {
-        dbg_printf("%s", "STOP - RT_CONFIG == RT_COPY_TO\n");
-        TIME_NOW(&end);
     }
 
     uint64_t nr_batches;
