@@ -67,7 +67,8 @@ typedef struct dpu_runtime_interval {
  */
 typedef enum dpu_runtime_config {
     RT_ALL = 0,
-    RT_LAUNCH = 1
+    RT_LAUNCH = 1,
+    RT_COPY_TO = 2
 } dpu_runtime_config;
 
 /**
@@ -241,7 +242,10 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len,
     uint64_t copied_indices;
     struct dpu_set_t dpu;
 
-    if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
+    if (runtime_group && (RT_CONFIG == RT_ALL || RT_CONFIG == RT_COPY_TO)) {
+        dbg_printf("%s", "START - RT_CONFIG == RT_ALL | RT_COPY_TO\n");
+        TIME_NOW(&start);
+    }
 
     for(int k=0; k<allocated_ranks; k++){
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
@@ -271,14 +275,18 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len,
 
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
 
-            if (runtime_group && RT_CONFIG == RT_LAUNCH) TIME_NOW(&start);
-            
+            if (runtime_group && RT_CONFIG == RT_LAUNCH) {
+                dbg_printf("%s", "STOP - RT_CONFIG == RT_LAUNCH\n");
+                TIME_NOW(&start);
+            }
+
             uint64_t tmp_int=1;
             DPU_ASSERT(dpu_copy_to(dpu, "first_run" , 0, &tmp_int, sizeof(uint64_t)));
             DPU_ASSERT(dpu_launch(dpu, DPU_SYNCHRONOUS));
 
             if (runtime_group && RT_CONFIG == RT_LAUNCH) {
                 if(runtime_group[dpu_id].in_use >= runtime_group[dpu_id].length) {
+                    dbg_printf("%s", "STOP - RT_CONFIG == RT_LAUNCH\n");
                     TIME_NOW(&end);
                     fprintf(stderr,
                         "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
@@ -292,6 +300,11 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len,
         }
     }
 
+    if (runtime_group && RT_CONFIG == RT_COPY_TO) {
+        dbg_printf("%s", "STOP - RT_CONFIG == RT_COPY_TO\n");
+        TIME_NOW(&end);
+    }
+
     uint64_t nr_batches;
     struct lookup_result *partial_results[done_dpus];
     for( int k=0; k<allocated_ranks; k++){
@@ -300,12 +313,15 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len,
             partial_results[dpu_id]=malloc(sizeof(struct lookup_result)*nr_batches);
             DPU_ASSERT(dpu_copy_from(dpu, "results", 0, &partial_results[dpu_id][0], ALIGN(sizeof(struct lookup_result)*nr_batches,8)));
 
-            if (runtime_group && RT_CONFIG == RT_ALL) {
-                for (int i = 0; i < NR_DPUS; i++) {
-                    printf("runtime_group[%d].in_use = %d, runtime_group[%d].length = %d\n",
-                    i, runtime_group[i].in_use, i, runtime_group[i].in_use);
+            if (runtime_group) {
+                // for (int i = 0; i < NR_DPUS; i++) {
+                //     printf("runtime_group[%d].in_use = %d, runtime_group[%d].length = %d\n",
+                //     i, runtime_group[i].in_use, i, runtime_group[i].in_use);
+                // }
+                if (runtime_group && RT_CONFIG == RT_ALL) {
+                    dbg_printf("%s", "STOP - RT_CONFIG == RT_ALL\n");
+                    TIME_NOW(&end);
                 }
-                TIME_NOW(&end);
                 if(runtime_group[dpu_id].in_use >= runtime_group[dpu_id].length) {
                     fprintf(stderr,
                         "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
@@ -314,7 +330,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t *indices_len,
                 }
                 copy_interval(
                         &runtime_group->intervals[runtime_group[dpu_id].in_use], &start, &end);
-                        runtime_group[dpu_id].in_use++;
+                runtime_group[dpu_id].in_use++;
             }
         }
     }
