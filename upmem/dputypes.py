@@ -92,8 +92,8 @@ class LookupQuery(Structure):
     _fields_ = [
         ("nr_indices", c_uint32),
         ("nr_offsets", c_uint32),
-        ("indices", c_uint32*1024),
-        ("offsets", c_uint32*32)
+        ("indices", c_uint32*2048),
+        ("offsets", c_uint32*64)
     ]
 
     def __init__(self, nr_indices, nr_offsets, indices,offsets):

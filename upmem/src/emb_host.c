@@ -257,7 +257,6 @@ int32_t* lookup(struct lookup_query *queries, int32_t *final_results,
     for( int k=0; k<allocated_ranks; k++){
         uint64_t tmp_int=1;
         DPU_ASSERT(dpu_copy_to(dpu_ranks[k], "first_run" , 0, &tmp_int, sizeof(uint64_t)));
-
         if (runtime_group && RT_CONFIG == RT_LAUNCH) TIME_NOW(&start);
         DPU_ASSERT(dpu_launch(dpu_ranks[k], DPU_SYNCHRONOUS));
 
@@ -283,7 +282,7 @@ int32_t* lookup(struct lookup_query *queries, int32_t *final_results,
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
             DPU_ASSERT(dpu_copy_from(dpu, "nr_offsets", 0 , &nr_batches, sizeof(uint64_t)));
             partial_results[dpu_id]=malloc(sizeof(struct lookup_result)*nr_batches);
-            DPU_ASSERT(dpu_copy_from(dpu, "results", 0, &partial_results[dpu_id][0], ALIGN(sizeof(struct lookup_result)*nr_batches,8)));
+            dpu_copy_from(dpu, "results", 0, &partial_results[dpu_id][0],ALIGN(sizeof(struct lookup_result)*nr_batches,8));
 
             if (runtime_group && RT_CONFIG == RT_ALL) {
                 TIME_NOW(&end);
