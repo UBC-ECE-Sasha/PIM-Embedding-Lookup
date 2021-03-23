@@ -172,8 +172,9 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
     if (ready_to_alloc_buffs >= DPUS_PER_RANK || table_id == NR_TABLES - 1) {
         struct dpu_set_t set, dpu, dpu_rank;
         //printf("allocating %d dpus and %d dpus allocated before.\n", ready_to_alloc_buffs, done_dpus);
-        if (ready_to_alloc_buffs <= DPUS_PER_RANK)
+        if (ready_to_alloc_buffs <= DPUS_PER_RANK){
             DPU_ASSERT(dpu_alloc(ready_to_alloc_buffs, NULL, &set));
+        }
         else
             DPU_ASSERT(dpu_alloc(DPUS_PER_RANK, NULL, &set));
         DPU_ASSERT(dpu_load(set, DPU_BINARY, NULL));
@@ -234,60 +235,22 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
     Result:
     This function updates ans with the elements of the rows that we have lookedup
 */
-int32_t* lookup(lookup_query* queries, int32_t *final_results,
+int32_t* lookup(struct lookup_query *queries, int32_t *final_results,
                 dpu_runtime_group *runtime_group){
     struct timespec start, end;
-    int dpu_id, tmp_ptr=0, table_ptr=0, indices_ptr=0, offsets_ptr=0, max_len=0;
-    uint64_t copied_indices;
+    int dpu_id;
     struct dpu_set_t dpu;
 
     if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
  
     for(int k=0; k<allocated_ranks; k++){
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
-
-            if (runtime_group && RT_CONFIG == RT_COPY) TIME_NOW(&start); 
-
-            if(tables[table_ptr]->nr_buffers==tmp_ptr){
-                if(queries[table_ptr].nr_indices>max_len)
-                    max_len=queries[table_ptr].nr_indices;
-                tmp_ptr=0;
-                indices_ptr+=queries[table_ptr].nr_indices;
-                offsets_ptr+=queries[table_ptr].nr_offsets;
-                table_ptr++;
-            }
-            /* copied_indices=0;
-            while(copied_indices<queries[table_ptr].nr_indices){
-                DPU_ASSERT(dpu_copy_to(dpu, "input_indices" , copied_indices*sizeof(uint32_t), 
-                (const uint32_t *)&indices[indices_ptr+copied_indices],
-                ALIGN(MIN(2048,(indices_len[table_ptr]-copied_indices)*sizeof(uint32_t)),8)));
-                copied_indices+=2048/sizeof(uint32_t);
-            } */
-
-            DPU_ASSERT(dpu_copy_to(dpu, "input_queries" , 0, (const lookup_query *)&queries[table_ptr], 
-            ALIGN(offsets_len[table_ptr]*sizeof(uint32_t),8)));
-            struct lookup_query tmp_query;
-            tmp_query.nr_indices=indices_len[table_ptr];
-            tmp_query.nr_offsets=offsets_len[table_ptr];
-            //&(tmp_query.offsets[0])=&offsets[offsets_ptr];
-            DPU_ASSERT(dpu_prepare_xfer(dpu, &tmp_query));
-            tmp_ptr++;
+            DPU_ASSERT(dpu_prepare_xfer(dpu, &queries[dpu_id]));
+            //printf("in host offsets_len dpu %d: %d\n",dpu_id,queries[dpu_id].nr_offsets);
+            //printf("in host indices_len dpu %d: %d\n",dpu_id,queries[dpu_id].nr_indices);
         }
         DPU_ASSERT(dpu_push_xfer(dpu_ranks[k], DPU_XFER_TO_DPU, "input_query", 0, 
         sizeof(struct lookup_query), DPU_XFER_DEFAULT));
-
-        if (runtime_group && RT_CONFIG == RT_COPY) {
-            if(runtime_group[dpu_id].in_use >= runtime_group[dpu_id].length) {
-                TIME_NOW(&end);
-                fprintf(stderr,
-                    "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
-                    dpu_id, runtime_group[dpu_id].in_use, dpu_id, runtime_group[dpu_id].length);
-                exit(1);
-            }
-            copy_interval(
-                &runtime_group->intervals[runtime_group[dpu_id].in_use], &start, &end);
-                runtime_group[dpu_id].in_use++;
-        }
     }
 
     // run dpus
@@ -295,20 +258,20 @@ int32_t* lookup(lookup_query* queries, int32_t *final_results,
         uint64_t tmp_int=1;
         DPU_ASSERT(dpu_copy_to(dpu_ranks[k], "first_run" , 0, &tmp_int, sizeof(uint64_t)));
 
-        if (runtime_group && RT_CONFIG == RT_LAUNCH) TIME_NOW(&start);   
+        if (runtime_group && RT_CONFIG == RT_LAUNCH) TIME_NOW(&start);
         DPU_ASSERT(dpu_launch(dpu_ranks[k], DPU_SYNCHRONOUS));
 
         if (runtime_group && RT_CONFIG == RT_LAUNCH) {
-            if(runtime_group[dpu_id].in_use >= runtime_group[dpu_id].length) {
+            if(runtime_group[k].in_use >= runtime_group[k].length) {
                 TIME_NOW(&end);
                 fprintf(stderr,
                     "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
-                    dpu_id, runtime_group[dpu_id].in_use, dpu_id, runtime_group[dpu_id].length);
+                    k, runtime_group[k].in_use, k, runtime_group[k].length);
                 exit(1);
             }
             copy_interval(
-                &runtime_group->intervals[runtime_group[dpu_id].in_use], &start, &end);
-                runtime_group[dpu_id].in_use++;
+                &runtime_group->intervals[runtime_group[k].in_use], &start, &end);
+                runtime_group[k].in_use++;
         }
         
     }
@@ -318,8 +281,7 @@ int32_t* lookup(lookup_query* queries, int32_t *final_results,
     struct lookup_result *partial_results[done_dpus];
     for( int k=0; k<allocated_ranks; k++){
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
-            DPU_ASSERT(dpu_copy_from(dpu, "input_query", 0 , &dpu_query, sizeof(struct lookup_query)));
-            nr_batches=dpu_query.nr_offsets;
+            DPU_ASSERT(dpu_copy_from(dpu, "nr_offsets", 0 , &nr_batches, sizeof(uint64_t)));
             partial_results[dpu_id]=malloc(sizeof(struct lookup_result)*nr_batches);
             DPU_ASSERT(dpu_copy_from(dpu, "results", 0, &partial_results[dpu_id][0], ALIGN(sizeof(struct lookup_result)*nr_batches,8)));
 
@@ -342,7 +304,7 @@ int32_t* lookup(lookup_query* queries, int32_t *final_results,
     int32_t tmp_result[NR_COLS];
     for( int k=0; k<NR_TABLES; k++){
         if(tables[k]->nr_buffers==1){
-            for( int j=0; j<offsets_len[k]; j++){
+            for( int j=0; j<queries[k].nr_offsets; j++){
                 for(int i=0; i<NR_COLS; i++){
                     final_results[data_ptr+i]=partial_results[result_ptr][j].data[i];
                     //printf("final_result[%d]=%d\n",data_ptr+i,final_results[data_ptr+i]);
@@ -352,7 +314,7 @@ int32_t* lookup(lookup_query* queries, int32_t *final_results,
             result_ptr++;
         }
         else{
-            for( int j=0; j<offsets_len[k]; j++){
+            for( int j=0; j<queries[k].nr_offsets; j++){
                 for (int l=0; l<NR_COLS; l++)
                     tmp_result[l]=0;
                 for( int t=0; t< tables[k]->nr_buffers; t++){

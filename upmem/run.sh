@@ -40,10 +40,10 @@ kaggle_env() {
 
 random_env() {
     export NR_TABLES=12
-    export NR_COLS=64
-    export MAX_NR_BATCHES=128
-    export MAX_INDICE_PER_OP=32
+    export NR_COLS=32
+    export MAX_NR_BATCHES=32
     export NR_TASKLETS=16
+    export MAX_IND_PER_BATCH=32
 }
 
 toy_env() {
@@ -74,13 +74,13 @@ kaggle_run() {
 
 random_run() {
     python3 "${cwd}/../dlrm/dlrm_dpu_pytorch.py" \
-           --arch-embedding-size=65000-65000-65000-65000-65000-65000-65000-65000-65000-65000-65000-65000 \
-           --arch-sparse-feature-size=64 \
-           --arch-mlp-bot=1440-720-64 \
+           --arch-embedding-size=30000-30000-30000-30000-30000-30000-30000-30000-30000-30000-30000-30000 \
+           --arch-sparse-feature-size=32 \
+           --arch-mlp-bot=1440-720-32 \
            --arch-mlp-top=40-20-10-1 \
            --data-generation=random \
-           --mini-batch-size=128 \
-           --num-batches=100 \
+           --mini-batch-size=32 \
+           --num-batches=10 \
            --num-indices-per-lookup=32 \
            --num-indices-per-lookup-fixed=True \
            --inference-only
