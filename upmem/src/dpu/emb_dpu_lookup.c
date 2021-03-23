@@ -11,14 +11,13 @@
 #include <sem.h>
 
 __mram_noinit struct embedding_buffer emb_buffer;
-__mram_noinit uint64_t input_nr_indices;
-__mram_noinit uint64_t input_nr_offsets;
+__mram_noinit struct lookup_query input_query;
 
-__mram_noinit int32_t emb_data[MEGABYTE(14)];
-__mram_noinit uint32_t input_indices[32*MAX_NR_BATCHES];
-__mram_noinit uint32_t input_offsets[MAX_NR_BATCHES];
+__mram_noinit int32_t emb_data[MAX_CAPACITY];
 __mram_noinit struct lookup_result results[MAX_NR_BATCHES];
 __mram_noinit uint64_t first_run;
+__mram_ptr uint8_t *mram_ptr;
+__mram_noinit uint64_t nr_offsets;
 
 
 uint32_t indices_ptr[NR_TASKLETS],first_row,last_row;
@@ -26,53 +25,56 @@ struct embedding_buffer table;
 SEMAPHORE_INIT(first_run_sem,1);
 SEMAPHORE_INIT(result_sem,1);
 
-uint64_t nr_batches, indices_len, copied_indices;
-__dma_aligned uint32_t indices[32*MAX_NR_BATCHES], offsets[MAX_NR_BATCHES];
+int rem_query_len;
+uint8_t *wram_ptr;
+__dma_aligned struct lookup_query query;
 
 int
 main() {
     sem_take(&first_run_sem);
     if(first_run==1){
+        uint64_t tmp_nr_offsets;
         mem_reset();
-        copied_indices=0;
-
         mram_read(&emb_buffer, &table, ALIGN(sizeof(struct embedding_buffer),8));
         first_row = table.first_row;
         last_row = table.last_row;
 
-        mram_read(&input_nr_indices, &indices_len, sizeof(uint64_t));
-        mram_read(&input_nr_offsets, &nr_batches, sizeof(uint64_t));
-
-        while(copied_indices<indices_len){
-            mram_read(&input_indices[copied_indices],&indices[copied_indices],
-            ALIGN(MIN(2048, (indices_len-copied_indices)*sizeof(uint32_t)),8));
-            copied_indices+=2048/sizeof(uint32_t);
+        wram_ptr=(uint8_t*)&query;
+        mram_ptr=(__mram_ptr uint8_t*)&input_query;
+        rem_query_len=sizeof(struct lookup_query);
+        while(rem_query_len>0){
+            mram_read(mram_ptr,wram_ptr,ALIGN(MIN(2048, rem_query_len),8));
+            wram_ptr+=2048;
+            mram_ptr+=2048;
+            rem_query_len-=2048;
         }
-        mram_read(input_offsets,offsets,ALIGN(nr_batches*sizeof(uint32_t),8));
         first_run=0;
+        tmp_nr_offsets=((struct lookup_query)query).nr_offsets;
+        mram_write(&tmp_nr_offsets,&nr_offsets,sizeof(uint64_t));
     }
     sem_give(&first_run_sem);
     
-    __dma_aligned int32_t read_buff[ALIGN(NR_COLS+1,8)];       
+    __dma_aligned int32_t read_buff[ALIGN(NR_COLS+1,8)]; 
+    __dma_aligned struct lookup_result tmp_result;  
 
     if(me()!=0)
-        indices_ptr[me()]=offsets[me()];
+        indices_ptr[me()]=((struct lookup_query)query).offsets[me()];
     else
         indices_ptr[me()]=0;
 
-    for (uint64_t i=me(); i< nr_batches; i+=NR_TASKLETS){
+    for (uint32_t i=me(); i< ((struct lookup_query)query).nr_offsets; i+=NR_TASKLETS){
        
-        __dma_aligned struct lookup_result tmp_result;
         tmp_result.id=i;
         tmp_result.is_complete=true;
         for (int j=0; j<NR_COLS; j++)
             tmp_result.data[j]=0;
 
-        while ( (i==nr_batches-1 && indices_ptr[me()]<indices_len) || 
-        (i<nr_batches-1 && indices_ptr[me()]<offsets[i+1]) )
+       while ( (i==((struct lookup_query)query).nr_offsets-1 && indices_ptr[me()]<((struct lookup_query)query).nr_indices) || 
+        (i<((struct lookup_query)query).nr_offsets-1 && indices_ptr[me()]<((struct lookup_query)query).offsets[i+1]) )
         {
-            if(indices[indices_ptr[me()]]<=last_row && indices[indices_ptr[me()]]>=first_row){
-                uint32_t ind = (indices[indices_ptr[me()]]-first_row)*NR_COLS;
+            if(((struct lookup_query)query).indices[indices_ptr[me()]]<=last_row && 
+            ((struct lookup_query)query).indices[indices_ptr[me()]]>=first_row){
+                uint32_t ind = (((struct lookup_query)query).indices[indices_ptr[me()]]-first_row)*NR_COLS;
                 mram_read(&emb_data[ind],read_buff,ALIGN(NR_COLS*sizeof(int32_t),8));
                 for (int j=0; j<NR_COLS; j++) {
                     // Read from j + ((ind % 2) != 0) when read was from non-aligned address
@@ -84,13 +86,12 @@ main() {
             }
             indices_ptr[me()]++;
         }
-
         sem_take(&result_sem);
         mram_write(&tmp_result,&results[i], sizeof(struct lookup_result));
         sem_give(&result_sem);
 
-        if(i+NR_TASKLETS<nr_batches){
-            indices_ptr[me()]=offsets[i+NR_TASKLETS];
+        if(i+NR_TASKLETS<((struct lookup_query)query).nr_offsets){
+            indices_ptr[me()]=((struct lookup_query)query).offsets[i+NR_TASKLETS];
         }
     }
     return 0;

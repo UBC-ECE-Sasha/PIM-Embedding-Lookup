@@ -2,7 +2,7 @@
 #include <stdbool.h>
 
 #define MAX_ENC_BUFFER_SIZE MEGABYTE(MAX_ENC_BUFFER_MB)
-#define MAX_CAPACITY MEGABYTE(14) //Must be a multiply of 2
+#define MAX_CAPACITY MEGABYTE(8) //Must be a multiply of 2
 #define DPUS_PER_RANK 64
 #define AVAILABLE_RANKS 10
 #define MAX_NR_BUFFERS 100
@@ -24,4 +24,10 @@ struct lookup_result {
     int32_t data[ALIGN(NR_COLS,2)];
     uint32_t id;
     bool is_complete;
+};
+
+struct lookup_query {
+    uint32_t nr_indices, nr_offsets;
+    uint32_t indices[32*MAX_NR_BATCHES];
+    uint32_t offsets[MAX_NR_BATCHES];
 };
