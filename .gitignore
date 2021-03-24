@@ -160,3 +160,6 @@ upmem/start-docker.sh
 
 # Niloo local files
 upmem/local_files
+
+# Benchmark output
+upmem/runtime/
