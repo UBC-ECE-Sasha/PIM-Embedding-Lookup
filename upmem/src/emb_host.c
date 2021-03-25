@@ -16,7 +16,7 @@
 #include <errno.h>
 #include <time.h>
 
-#define RT_CONFIG 2
+#define RT_CONFIG 0
 
 #ifndef DPU_BINARY
 #    define DPU_BINARY "../upmem/emb_dpu_lookup" // Relative path regarding the PyTorch code
@@ -68,7 +68,9 @@ typedef struct dpu_runtime_interval {
 typedef enum dpu_runtime_config {
     RT_ALL = 0,
     RT_LAUNCH = 1,
-    RT_COPY = 2,
+    RT_COPY_TO = 2,
+    RT_COPY_BACK = 3,
+    RT_AGGR = 4
 } dpu_runtime_config;
 
 /**
@@ -241,38 +243,63 @@ int32_t* lookup(struct lookup_query *queries, int32_t *final_results,
     int dpu_id;
     struct dpu_set_t dpu;
 
-    if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
+    if (runtime_group && (RT_CONFIG == RT_ALL || RT_CONFIG == RT_COPY_TO)) {
+        dbg_printf("%s", "START - RT_CONFIG == RT_ALL | RT_COPY_TO\n");
+        TIME_NOW(&start);
+    }
  
     for(int k=0; k<allocated_ranks; k++){
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
             DPU_ASSERT(dpu_prepare_xfer(dpu, &queries[dpu_id]));
-            //printf("in host offsets_len dpu %d: %d\n",dpu_id,queries[dpu_id].nr_offsets);
-            //printf("in host indices_len dpu %d: %d\n",dpu_id,queries[dpu_id].nr_indices);
         }
         DPU_ASSERT(dpu_push_xfer(dpu_ranks[k], DPU_XFER_TO_DPU, "input_query", 0, 
         sizeof(struct lookup_query), DPU_XFER_DEFAULT));
+    }
+
+    if (runtime_group && RT_CONFIG == RT_COPY_TO) {
+        dbg_printf("%s", "STOP - RT_CONFIG == RT_COPY_TO\n");
+        TIME_NOW(&end);
+        printf("time for copy: %f ms\n",((float)(end.tv_nsec-start.tv_nsec)/pow(10,6)));
     }
 
     // run dpus
     for( int k=0; k<allocated_ranks; k++){
         uint64_t tmp_int=1;
         DPU_ASSERT(dpu_copy_to(dpu_ranks[k], "first_run" , 0, &tmp_int, sizeof(uint64_t)));
-        if (runtime_group && RT_CONFIG == RT_LAUNCH) TIME_NOW(&start);
+        
+        if (runtime_group && RT_CONFIG == RT_LAUNCH) {
+                dbg_printf("%s", "STOP - RT_CONFIG == RT_LAUNCH\n");
+                TIME_NOW(&start);
+        }
         DPU_ASSERT(dpu_launch(dpu_ranks[k], DPU_SYNCHRONOUS));
 
         if (runtime_group && RT_CONFIG == RT_LAUNCH) {
-            if(runtime_group[k].in_use >= runtime_group[k].length) {
-                TIME_NOW(&end);
-                fprintf(stderr,
-                    "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
-                    k, runtime_group[k].in_use, k, runtime_group[k].length);
-                exit(1);
-            }
-            copy_interval(
+        dbg_printf("%s", "STOP - RT_CONFIG == RT_LAUNCH\n");
+        TIME_NOW(&end);
+        printf("time for launch: %f ms\n",((float)(end.tv_nsec-start.tv_nsec)/pow(10,6)));
+        }
+    
+        /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {
+                if(runtime_group[k].in_use >= runtime_group[k].length) {
+                    dbg_printf("%s", "STOP - RT_CONFIG == RT_LAUNCH\n");
+                    TIME_NOW(&end);
+                    fprintf(stderr,
+                        "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
+                        dpu_id, runtime_group[dpu_id].in_use, dpu_id, runtime_group[dpu_id].length);
+                    exit(1);
+                }
+                copy_interval(
                 &runtime_group->intervals[runtime_group[k].in_use], &start, &end);
                 runtime_group[k].in_use++;
-        }
+
+                printf("time for launch: %f ms\n",((float)(end.tv_nsec-start.tv_nsec)/pow(10,6)));
+        } */
         
+    }
+
+    if (runtime_group && RT_CONFIG == RT_COPY_BACK) {
+                dbg_printf("%s", "STOP - RT_CONFIG == RT_COPY_BACK\n");
+                TIME_NOW(&start);
     }
 
     struct lookup_query dpu_query;
@@ -284,7 +311,7 @@ int32_t* lookup(struct lookup_query *queries, int32_t *final_results,
             partial_results[dpu_id]=malloc(sizeof(struct lookup_result)*nr_batches);
             dpu_copy_from(dpu, "results", 0, &partial_results[dpu_id][0],ALIGN(sizeof(struct lookup_result)*nr_batches,8));
 
-            if (runtime_group && RT_CONFIG == RT_ALL) {
+            /* if (runtime_group && RT_CONFIG == RT_ALL) {
                 TIME_NOW(&end);
                 if(runtime_group[dpu_id].in_use >= runtime_group[dpu_id].length) {
                     fprintf(stderr,
@@ -293,12 +320,23 @@ int32_t* lookup(struct lookup_query *queries, int32_t *final_results,
                     exit(1);
                 }
                 copy_interval(
-                        &runtime_group->intervals[runtime_group[dpu_id].in_use], &start, &end);
-                        runtime_group[dpu_id].in_use++;
-            }
+                &runtime_group->intervals[runtime_group[dpu_id].in_use], &start, &end);
+                runtime_group[dpu_id].in_use++;
+
+                printf("time for all: %f ms\n",((float)(end.tv_nsec-start.tv_nsec)/pow(10,6)));
+            } */
+        }
+        if (runtime_group && RT_CONFIG == RT_COPY_BACK) {
+            dbg_printf("%s", "STOP - RT_CONFIG == RT_COPY_BACK\n");
+            TIME_NOW(&end);
+            printf("time for copy_back: %f ms\n",((float)(end.tv_nsec-start.tv_nsec)/pow(10,6)));
         }
     }
 
+    if (runtime_group && RT_CONFIG == RT_AGGR) {
+                dbg_printf("%s", "STOP - RT_CONFIG == RT_AGGR\n");
+                TIME_NOW(&start);
+    }
     int result_ptr=0, data_ptr=0;
     int32_t tmp_result[NR_COLS];
     for( int k=0; k<NR_TABLES; k++){
@@ -328,6 +366,17 @@ int32_t* lookup(struct lookup_query *queries, int32_t *final_results,
             }
             result_ptr+=tables[k]->nr_buffers;
         }
+    }
+    if (runtime_group && RT_CONFIG == RT_AGGR) {
+        dbg_printf("%s", "STOP - RT_CONFIG == RT_AGGR\n");
+        TIME_NOW(&end);
+        printf("time for aggr: %f ms\n",((float)(end.tv_nsec-start.tv_nsec)/pow(10,6)));
+    }
+
+    if (runtime_group && RT_CONFIG == RT_ALL) {
+        dbg_printf("%s", "STOP - RT_CONFIG == RT_ALL\n");
+        TIME_NOW(&end);
+        printf("time for all: %f ms\n",((float)(end.tv_nsec-start.tv_nsec)/pow(10,6)));
     }
     return 0;
 }
