@@ -4,14 +4,13 @@ PROJECT             = emb_host
 PROJECT_LIB         = emblib.so
 EXE_DPU             ?= emb_dpu_lookup
 BUILD_DIR           ?= build
-NR_DPUS             ?= 12
+NR_DPUS             ?= 32
 NR_TASKLETS         ?= 14
 COUNTER_CONFIG      ?= "COUNT_CYCLES"
 SHOW_DPU_LOGS       ?= 1
 MAX_ENC_BUFFER_MB   ?= 1
-NR_TABLES           ?= 12
+NR_TABLES           ?= 8
 MAX_NR_BATCHES      ?= 32
-MAX_IND_PER_BATCH   ?= 32
 RT_CONFIG           ?= "ALL"
 
 # TEST with c_test.py
@@ -21,8 +20,8 @@ ifeq ($(DPU_TEST),1)
   NR_COLS             ?= 6
   NR_DPUS             = 8
 else
-  NR_COLS             ?= 32
-  NR_DPUS             ?= 12
+  NR_COLS             ?= 16
+  NR_DPUS             ?= 32
 endif
 
 # Version information
@@ -73,7 +72,6 @@ CFLAGS              += $(COMMON_CFLAGS) \
                        -DNR_TABLES=$(NR_TABLES) \
                        -DNR_COLS=$(NR_COLS) \
                        -DMAX_NR_BATCHES=$(MAX_NR_BATCHES) \
-                       -DMAX_IND_PER_BATCH=$(MAX_IND_PER_BATCH) \
                        -DHOST=1 \
                        -DDPU_BINARY=\"dpu/$(EXE_DPU)\" \
                        -DMAX_ENC_BUFFER_MB="$(MAX_ENC_BUFFER_MB)" \
@@ -139,11 +137,10 @@ export EXE_DPU
 export NR_TABLES
 export NR_COLS
 export MAX_NR_BATCHES
-export MAX_IND_PER_BATCH
 
 dpu:
 	$(SHOW_MAKE) $@
-	$(MAKE) -C src/dpu
+	$(SILENCE)$(MAKE) -C src/dpu
 
 ##############################################################################################
 # Tests

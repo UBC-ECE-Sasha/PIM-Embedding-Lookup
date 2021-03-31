@@ -78,20 +78,6 @@ class DpuRuntimeTotals(Structure):
     def __init__(self):
         super(DpuRuntimeTotals, self).__init__(0, 0, 0, 0, 0, 0)
 
-
-class LookupQuery(Structure):
-    """ctypes compatible lookup_query struct"""
-    _fields_ = [
-        ("nr_indices", c_uint32),
-        ("nr_offsets", c_uint32),
-        ("indices", c_uint32*1024),
-        ("offsets", c_uint32*32)
-    ]
-
-    def __init__(self, nr_indices, nr_offsets, indices,offsets):
-        super(LookupQuery, self).__init__(nr_indices, nr_offsets, indices, offsets)
-
-
 ## Helper Functions ##
 
 def customresize(array, new_size):
