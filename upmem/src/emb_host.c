@@ -67,8 +67,7 @@ typedef struct dpu_runtime_interval {
  */
 typedef enum dpu_runtime_config {
     RT_ALL = 0,
-    RT_LAUNCH = 1,
-    RT_COPY_TO = 2
+    RT_LAUNCH = 1
 } dpu_runtime_config;
 
 /**
@@ -241,10 +240,7 @@ int32_t* lookup(struct lookup_query *queries, int32_t *final_results,
     int dpu_id;
     struct dpu_set_t dpu;
 
-    if (runtime_group && (RT_CONFIG == RT_ALL || RT_CONFIG == RT_COPY_TO)) {
-        dbg_printf("%s", "START - RT_CONFIG == RT_ALL | RT_COPY_TO\n");
-        TIME_NOW(&start);
-    }
+    if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
 
     for(int k=0; k<allocated_ranks; k++){
         DPU_FOREACH(dpu_ranks[k], dpu, dpu_id){
@@ -254,11 +250,6 @@ int32_t* lookup(struct lookup_query *queries, int32_t *final_results,
         }
         DPU_ASSERT(dpu_push_xfer(dpu_ranks[k], DPU_XFER_TO_DPU, "input_query", 0, 
         sizeof(struct lookup_query), DPU_XFER_DEFAULT));
-    }
-
-    if (runtime_group && RT_CONFIG == RT_COPY_TO) {
-        dbg_printf("%s", "STOP - RT_CONFIG == RT_COPY_TO\n");
-        TIME_NOW(&end);
     }
 
     // run dpus
@@ -298,6 +289,7 @@ int32_t* lookup(struct lookup_query *queries, int32_t *final_results,
                     //printf("runtime_group[%d].in_use = %d, runtime_group[%d].length = %d\n",
                     //, runtime_group[i].in_use, i, runtime_group[i].in_use);
                 }
+                TIME_NOW(&end);
                 if(runtime_group[dpu_id].in_use >= runtime_group[dpu_id].length) {
                     fprintf(stderr,
                         "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
@@ -306,7 +298,7 @@ int32_t* lookup(struct lookup_query *queries, int32_t *final_results,
                 }
                 copy_interval(
                         &runtime_group->intervals[runtime_group[dpu_id].in_use], &start, &end);
-                runtime_group[dpu_id].in_use++;
+                        runtime_group[dpu_id].in_use++;
             }
         }
     }
