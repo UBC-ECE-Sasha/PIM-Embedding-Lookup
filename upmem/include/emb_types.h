@@ -5,16 +5,18 @@
 #define MAX_CAPACITY MEGABYTE(14) //Must be a multiply of 2
 #define DPUS_PER_RANK 64
 #define AVAILABLE_RANKS 10
-#define MAX_NR_BUFFERS 100
+#define MAX_NR_BUFFERS 65
 
 struct embedding_buffer {
     int32_t *data;
-    uint64_t first_row, last_row;
+    uint32_t col_id;
     uint32_t table_id;
 };
 
 struct embedding_table {
-    uint32_t first_dpu_id, last_dpu_id, nr_buffers;
+    uint32_t rank_id;
+    //uint32_t first_dpu_id, last_dpu_id, nr_buffers;
+    struct dpu_set_t *rank;
     uint64_t nr_rows;
     struct embedding_buffer **buffers;
     int32_t *ans;

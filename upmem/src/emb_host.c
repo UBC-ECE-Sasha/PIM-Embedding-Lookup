@@ -1,7 +1,7 @@
 // to compile the code: gcc -O0 -g3 --std=c99 -o emb_host emb_host.c -g `dpu-pkg-config --cflags
 // --libs dpu` to build a shared library: gcc -shared -Wl,-soname,emb_host -o emblib.so -fPIC
 // emb_host.c `dpu-pkg-config --cflags --libs dpu`
-#include "common/include/common.h"
+#include "common.h"
 #include "host/include/host.h"
 #include "emb_types.h"
 
@@ -22,7 +22,7 @@
 #    define DPU_BINARY "../upmem/emb_dpu_lookup" // Relative path regarding the PyTorch code
 #endif
 
-uint32_t total_buffers=0, buff_arr_len=NR_TABLES;
+uint32_t total_buffers=0, buff_arr_len=NR_TABLES*NR_COLS;
 uint32_t ready_to_alloc_buffs=0, done_dpus=0, allocated_ranks=0;
 struct embedding_buffer *buffers[MAX_NR_BUFFERS];
 struct embedding_table *tables[NR_TABLES];
@@ -105,37 +105,37 @@ static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_row
 
     tables[table_id]->nr_rows = nr_rows;
 
-    tables[table_id]->nr_buffers = (int)((table_size*1.0)/(MAX_CAPACITY*1.0));
+    tables[table_id]->nr_buffers = NR_COLS;
+    /* (int)((table_size*1.0)/(MAX_CAPACITY*1.0));
     if((table_size%MAX_CAPACITY) != 0){
         tables[table_id]->nr_buffers+=1;
-    }
-    tables[table_id]->first_dpu_id=total_buffers;
-    for(int j=0; j<tables[table_id]->nr_buffers; j++){
-        *first_row = j*MAX_CAPACITY/NR_COLS;
-        *last_row = MIN(nr_rows-1, ((j+1)*MAX_CAPACITY)/NR_COLS-1);
+    } */
+    tables[table_id]->rank_id=allocated_ranks;
+    for(int j=0; j<NR_COLS; j++){
+        // *first_row = j*MAX_CAPACITY/NR_COLS;
+        // *last_row = MIN(nr_rows-1, ((j+1)*MAX_CAPACITY)/NR_COLS-1);
 
         buffers[total_buffers] = malloc(sizeof(struct embedding_buffer));
         if (buffers[total_buffers] == NULL) {
             return ENOMEM;
         }
 
-        buffers[total_buffers]->first_row = *first_row;
-        buffers[total_buffers]->last_row = *last_row;
+        buffers[total_buffers]->col_id= j;
         buffers[total_buffers]->table_id = table_id;
 
-        size_t sz = (*last_row-*first_row+1)*NR_COLS*sizeof(int32_t);
+        size_t sz = nr_rows*sizeof(int32_t);
         buffers[total_buffers]->data = malloc(ALIGN(sz,8));
         if (buffers[total_buffers]->data == NULL) {
             return ENOMEM;
         }
 
-        for(int k=0; k<(*last_row-*first_row+1)*NR_COLS; k++){
-            buffers[total_buffers]->data[k] = table_data[(*first_row*NR_COLS)+k];
+        for(int k=0; k<nr_rows; k++){
+            buffers[total_buffers]->data[k] = table_data[k*NR_COLS+j];
         }
         total_buffers++;
     }
     ready_to_alloc_buffs += tables[table_id]->nr_buffers;
-    tables[table_id]->last_dpu_id = total_buffers;
+    //tables[table_id]->last_dpu_id = total_buffers;
 
     return 0;
 }
@@ -166,56 +166,51 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
 
     TIME_NOW(&start);
 
-    // Done with analyzing all tables or nr ready_to_alloc_buffs enough for a rank so
-    // allocate a rank and copy embedding data.
-    if (ready_to_alloc_buffs >= DPUS_PER_RANK || table_id == NR_TABLES - 1) {
-        struct dpu_set_t set, dpu, dpu_rank;
+    //if (ready_to_alloc_buffs >= DPUS_PER_RANK || table_id == NR_TABLES - 1) {
+    struct dpu_set_t set, dpu, dpu_rank;
         //printf("allocating %d dpus and %d dpus allocated before.\n", ready_to_alloc_buffs, done_dpus);
-        if (ready_to_alloc_buffs <= DPUS_PER_RANK)
-            DPU_ASSERT(dpu_alloc(ready_to_alloc_buffs, NULL, &set));
-        else
-            DPU_ASSERT(dpu_alloc(DPUS_PER_RANK, NULL, &set));
-        DPU_ASSERT(dpu_load(set, DPU_BINARY, NULL));
+    //if (ready_to_alloc_buffs <= DPUS_PER_RANK)
+    DPU_ASSERT(dpu_alloc(ready_to_alloc_buffs, NULL, &set));
+    DPU_ASSERT(dpu_load(set, DPU_BINARY, NULL));
 
-        uint32_t len;
-        uint8_t dpu_id,rank_id;
-        DPU_FOREACH(set, dpu, dpu_id){
-            len= (buffers[done_dpus+dpu_id]->last_row-buffers[done_dpus+dpu_id]->first_row+1)*NR_COLS;
-            DPU_ASSERT(dpu_copy_to(dpu, "emb_data" , 0, (const int32_t *)buffers[done_dpus+dpu_id]->data, ALIGN(len*sizeof(int32_t),8)));
-            DPU_ASSERT(dpu_prepare_xfer(dpu, buffers[done_dpus+dpu_id]));
-        }
-        DPU_ASSERT(dpu_push_xfer(set,DPU_XFER_TO_DPU, "emb_buffer", 0, sizeof(struct embedding_buffer), DPU_XFER_DEFAULT));
+    uint32_t len;
+    uint8_t dpu_id,rank_id;
+    DPU_FOREACH(set, dpu, dpu_id){
+        len= (buffers[done_dpus+dpu_id]->last_row-buffers[done_dpus+dpu_id]->first_row+1)*NR_COLS;
+        DPU_ASSERT(dpu_copy_to(dpu, "emb_data" , 0, (const int32_t *)buffers[done_dpus+dpu_id]->data, ALIGN(len*sizeof(int32_t),8)));
+        DPU_ASSERT(dpu_prepare_xfer(dpu, buffers[done_dpus+dpu_id]));
+    }
+    DPU_ASSERT(dpu_push_xfer(set,DPU_XFER_TO_DPU, "emb_buffer", 0, sizeof(struct embedding_buffer), DPU_XFER_DEFAULT));
 
 
-        for (int i = done_dpus; i < ready_to_alloc_buffs; i++)
-            free(buffers[i]->data);
+    for (int i = done_dpus; i < ready_to_alloc_buffs; i++)
+        free(buffers[i]->data);
 
         // Assign dpus allocated to buffers to their embedding_tables.
-        for (int i=0; i<NR_TABLES; i++){
-            tables[i]->buffers=malloc(tables[i]->nr_buffers*sizeof(struct embedding_buffer*));
-        }
-
-        uint32_t table_ptr=0,tmp_ptr=0;
-        DPU_FOREACH(set, dpu, dpu_id){
-            if(tables[table_ptr]->nr_buffers==tmp_ptr){
-                table_ptr++;
-                tmp_ptr = 0;
-            }
-            tables[table_ptr]->buffers[tmp_ptr]=buffers[dpu_id];
-
-        }
-
-        // done with a set of dpus, make changes to their counters to move to next set.
-        if (ready_to_alloc_buffs <= DPUS_PER_RANK) {
-            done_dpus += ready_to_alloc_buffs;
-            ready_to_alloc_buffs = 0;
-        } else {
-            done_dpus += DPUS_PER_RANK;
-            ready_to_alloc_buffs -= DPUS_PER_RANK;
-        }
-        dpu_ranks[allocated_ranks] = set;
-        allocated_ranks++;
+    for (int i=0; i<NR_TABLES; i++){
+        tables[i]->buffers=malloc(tables[i]->nr_buffers*sizeof(struct embedding_buffer*));
     }
+
+    uint32_t table_ptr=0,tmp_ptr=0;
+    DPU_FOREACH(set, dpu, dpu_id){
+        if(tables[table_ptr]->nr_buffers==tmp_ptr){
+            table_ptr++;
+            tmp_ptr = 0;
+        }
+        tables[table_ptr]->buffers[tmp_ptr]=buffers[dpu_id];
+    }
+
+    // done with a set of dpus, make changes to their counters to move to next set.
+    if (ready_to_alloc_buffs <= DPUS_PER_RANK) {
+        done_dpus += ready_to_alloc_buffs;
+        ready_to_alloc_buffs = 0;
+    } else {
+        done_dpus += DPUS_PER_RANK;
+        ready_to_alloc_buffs -= DPUS_PER_RANK;
+    }
+    dpu_ranks[allocated_ranks] = set;
+    allocated_ranks++;
+
     TIME_NOW(&end);
 
     if (runtime) runtime->execution_time_populate_copy_in += TIME_DIFFERENCE(start, end);
