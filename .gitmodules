@@ -7,3 +7,6 @@
 [submodule "PIM-DeepRecSys"]
 	path = PIM-DeepRecSys
 	url = https://github.com/UBC-ECE-Sasha/PIM-DeepRecSys.git
+[submodule "PIM-dlrm-new"]
+	path = PIM-dlrm-new
+	url = https://github.com/UBC-ECE-Sasha/PIM-dlrm-new.git
