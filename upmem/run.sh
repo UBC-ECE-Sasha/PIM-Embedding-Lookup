@@ -39,15 +39,16 @@ kaggle_env() {
 }
 
 random_env() {
-    export NR_TABLES=12
+    export NR_TABLES=10
     export NR_COLS=64
     export MAX_NR_BATCHES=128
     export NR_TASKLETS=14
 }
 
 toy_env() {
+    export NR_COLS=8
     export DPU_TEST=1
-    export NR_TASKLETS=14
+    export NR_TASKLETS=1
 }
 
 global_env() {
@@ -72,8 +73,8 @@ kaggle_run() {
 }
 
 random_run() {
-    python3 "${cwd}/../dlrm/dlrm_dpu_pytorch.py" \
-           --arch-embedding-size=65000-65000-65000-65000-65000-65000-65000-65000-65000-65000-65000-65000 \
+    python3 "${cwd}/../PIM-dlrm-new/dlrm_dpu_pytorch.py" \
+           --arch-embedding-size=65000-65000-65000-65000-65000-65000-65000-65000-65000-65000 \
            --arch-sparse-feature-size=64 \
            --arch-mlp-bot=1440-720-64 \
            --arch-mlp-top=40-20-10-1 \

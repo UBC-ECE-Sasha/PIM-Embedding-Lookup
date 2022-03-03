@@ -7,14 +7,14 @@ from dputypes import *
 # DEFAULTS #
 so_file = None
 my_functions = None
-num_dpu=8
+num_dpu=1
 num_batches=32
 
 # Defaults, can be overriden by cli arguments
 if __name__ != "__main__":
     so_file = "./emblib.so"
     my_functions = CDLL(os.path.abspath(so_file))
-    num_dpu=8
+    num_dpu=1
     num_batches= 32
 
 
@@ -36,7 +36,7 @@ def parse():
 def populate(config, runtimes):
     my_functions.populate_mram.argtypes = c_uint32, c_uint64, POINTER(c_int32), POINTER(DpuRuntimeTotals)
     my_functions.populate_mram.restype = None
-    data_ptr = (c_int32 * 24)(1, 2, 3, 4, 5, 6, 2, 4, 6, 8, 10, 12, 3, 6, 9, 12, 15, 18, 4, 8, 12, 16, 20, 24)
+    data_ptr = (c_int32 * 32)(1, 2, 3, 4, 5, 6, 7, 8, 2, 4, 6, 8, 10, 12, 14, 16, 3, 6, 9, 12, 15, 18, 21, 24, 4, 8, 12, 16, 20, 24, 28, 32)
     for i in range (0, config.num_dpu):
         my_functions.populate_mram(i, 4, data_ptr, runtimes)
 
@@ -61,7 +61,7 @@ def lookup(config, runtime_group=None):
     offsets_len_ptr=(c_uint64 * len(offsets_len))(*offsets_len)
     ans=(c_int32 * (num_batches*6*config.num_dpu))()
 
-    for _ in range(8):
+    for _ in range(1):
         my_functions.lookup(indices_ptr, offsets_ptr, indices_len_ptr, offsets_len_ptr, ans, runtime_group)
 
     if runtime_group is not None:
