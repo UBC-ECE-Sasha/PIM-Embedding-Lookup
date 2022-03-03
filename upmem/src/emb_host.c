@@ -204,11 +204,12 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t indices_len,
 
     copied_indices=0;
     while(copied_indices<indices_len){
-        DPU_ASSERT(dpu_copy_to(dpu_ranks[table_id], "input_indices" , copied_indices*sizeof(uint32_t), (const uint32_t *)&indices[copied_indices],
-        ALIGN(MIN(2048,(indices_len-copied_indices)*sizeof(uint32_t)),8)));
+        DPU_ASSERT(dpu_copy_to(dpu_ranks[table_id], "input_indices" , copied_indices*sizeof(uint32_t),(const 
+            uint32_t *)&indices[copied_indices],ALIGN(MIN(2048,(indices_len-copied_indices)*sizeof(uint32_t)),8)));
         copied_indices+=2048/sizeof(uint32_t);
     }
-    DPU_ASSERT(dpu_copy_to(dpu_ranks[table_id], "input_offsets" , 0, (const uint32_t *)&offsets[0], ALIGN(nr_batches*sizeof(uint32_t),8)));
+    DPU_ASSERT(dpu_copy_to(dpu_ranks[table_id], "input_offsets" , 0, (const uint32_t *)&offsets[0], ALIGN(
+        nr_batches*sizeof(uint32_t),8)));
     DPU_ASSERT(dpu_copy_to(dpu_ranks[table_id], "input_nr_indices" , 0, &indices_len, sizeof(uint64_t)));
     DPU_ASSERT(dpu_copy_to(dpu_ranks[table_id], "input_nr_offsets" , 0, &nr_batches, sizeof(uint64_t)));
 
