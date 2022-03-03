@@ -139,15 +139,15 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
         exit(1);
     }
 
-    TIME_NOW(&start);
+    //TIME_NOW(&start);
     if (alloc_buffers(table_id, table_data, nr_rows) != 0) {
         enomem();
     }
-    TIME_NOW(&end);
+    //TIME_NOW(&end);
 
-    if (runtime) runtime->execution_time_prepare += TIME_DIFFERENCE(start, end);
+    //if (runtime) runtime->execution_time_prepare += TIME_DIFFERENCE(start, end);
 
-    TIME_NOW(&start);
+    //TIME_NOW(&start);
 
     struct dpu_set_t set, dpu, dpu_rank;
     DPU_ASSERT(dpu_alloc(NR_COLS, NULL, &set));
@@ -173,9 +173,9 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
     }
 
     dpu_ranks[table_id] = set;
-    TIME_NOW(&end);
+    //TIME_NOW(&end);
 
-    if (runtime) runtime->execution_time_populate_copy_in += TIME_DIFFERENCE(start, end);
+    //if (runtime) runtime->execution_time_populate_copy_in += TIME_DIFFERENCE(start, end);
 
     return;
 }
@@ -192,14 +192,15 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
     This function updates ans with the elements of the rows that we have lookedup
 */
 int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t indices_len,
-                uint64_t nr_batches, float *final_results, uint32_t table_id,
-                dpu_runtime_group *runtime_group){
-    struct timespec start, end;
-    int dpu_id, row_ptr=0, max_len=0;
+                uint64_t nr_batches, float *final_results, uint32_t table_id
+                //,dpu_runtime_group *runtime_group
+                ){
+    //struct timespec start, end;
+    int dpu_id;
     uint64_t copied_indices;
     struct dpu_set_t dpu;
 
-    if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
+    //if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
 
     copied_indices=0;
     while(copied_indices<indices_len){
@@ -212,13 +213,13 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t indices_len,
     DPU_ASSERT(dpu_copy_to(dpu_ranks[table_id], "input_nr_offsets" , 0, &nr_batches, sizeof(uint64_t)));
 
     // run dpus
-    if (runtime_group && RT_CONFIG == RT_LAUNCH) TIME_NOW(&start);
+    //if (runtime_group && RT_CONFIG == RT_LAUNCH) TIME_NOW(&start);
 
     uint64_t tmp_int=1;
     DPU_ASSERT(dpu_copy_to(dpu_ranks[table_id], "first_run" , 0, &tmp_int, sizeof(uint64_t)));
     DPU_ASSERT(dpu_launch(dpu_ranks[table_id], DPU_SYNCHRONOUS));
         
-    if (runtime_group && RT_CONFIG == RT_LAUNCH) {
+    /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {
         if(runtime_group[table_id].in_use >= runtime_group[table_id].length) {
             TIME_NOW(&end);
             fprintf(stderr,
@@ -229,7 +230,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t indices_len,
         copy_interval(
             &runtime_group->intervals[runtime_group[table_id].in_use], &start, &end);
             runtime_group[table_id].in_use++;
-    }
+    } */
 
     int32_t tmp_results[NR_COLS][nr_batches];
 
