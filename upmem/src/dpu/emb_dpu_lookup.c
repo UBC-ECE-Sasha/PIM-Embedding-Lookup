@@ -18,8 +18,6 @@ __mram_noinit int32_t emb_data[MEGABYTE(14)];
 __mram_noinit uint32_t input_indices[32*MAX_NR_BATCHES];
 __mram_noinit uint32_t input_offsets[MAX_NR_BATCHES];
 __mram_noinit int32_t results[MAX_NR_BATCHES];
-__mram_noinit uint64_t first_run;
-
 
 uint32_t indices_ptr[NR_TASKLETS];
 __dma_aligned struct buffer_meta table;
@@ -30,6 +28,7 @@ uint64_t nr_batches, indices_len, copied_indices;
 __dma_aligned uint32_t indices[32*MAX_NR_BATCHES], offsets[MAX_NR_BATCHES];
 __dma_aligned int32_t tmp_results[MAX_NR_BATCHES];
 
+__host uint8_t first_run = 1;
 int
 main() {
    /* __dma_aligned int32_t read_buff[8]; 
@@ -91,5 +90,10 @@ main() {
             indices_ptr[me()]=offsets[i+NR_TASKLETS];
         }
     }
+    sem_take(&first_run_sem);
+    if(first_run==0){
+        first_run=1;
+    }
+    sem_give(&first_run_sem);
     return 0;
 }

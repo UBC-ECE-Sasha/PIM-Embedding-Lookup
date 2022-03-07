@@ -212,12 +212,9 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t indices_len,
         nr_batches*sizeof(uint32_t),8)));
     DPU_ASSERT(dpu_copy_to(dpu_ranks[table_id], "input_nr_indices" , 0, &indices_len, sizeof(uint64_t)));
     DPU_ASSERT(dpu_copy_to(dpu_ranks[table_id], "input_nr_offsets" , 0, &nr_batches, sizeof(uint64_t)));
-
     // run dpus
     //if (runtime_group && RT_CONFIG == RT_LAUNCH) TIME_NOW(&start);
 
-    uint64_t tmp_int=1;
-    DPU_ASSERT(dpu_copy_to(dpu_ranks[table_id], "first_run" , 0, &tmp_int, sizeof(uint64_t)));
     DPU_ASSERT(dpu_launch(dpu_ranks[table_id], DPU_SYNCHRONOUS));
         
     /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {
@@ -234,33 +231,16 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t indices_len,
     } */
 
     int32_t tmp_results[NR_COLS][nr_batches];
-
     DPU_FOREACH(dpu_ranks[table_id], dpu, dpu_id){
-
         DPU_ASSERT(dpu_prepare_xfer(dpu,&tmp_results[dpu_id][0]));
     }
     DPU_ASSERT(dpu_push_xfer(dpu_ranks[table_id], DPU_XFER_FROM_DPU, "results",0,
     ALIGN(sizeof(int32_t)*nr_batches,8), DPU_XFER_DEFAULT));
 
-    /* for (int j=0;j<NR_COLS; j++){
-        for (int i=0; i<nr_batches; i++)
-            printf("%d: %d, ",i,tmp_results[j][i]);
-        printf("\n");
-    }
-    printf("---------\n"); */
-
-
     for (int j=0; j<NR_COLS; j++){
         for(int i=0; i<nr_batches; i++)
             final_results[i*NR_COLS+j]=(float)tmp_results[j][i]/pow(10,9);
     }
-
-/*     for (int i=0; i<nr_batches; i++){
-        for (int j=0; j<NR_COLS; j++)
-            printf("%f, ", final_results[i*NR_COLS+j]);
-        printf("\n");
-    }
-    printf("----------------\n"); */
 
     return 0;
 }
