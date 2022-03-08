@@ -199,21 +199,27 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t indices_len,
     int dpu_id;
     uint64_t copied_indices;
     struct dpu_set_t dpu;
+    struct query_len lengths;
 
     //if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
 
-    copied_indices=0;
-    while(copied_indices<indices_len){
-        DPU_ASSERT(dpu_copy_to(dpu_ranks[table_id], "input_indices" , copied_indices*sizeof(uint32_t),(const 
-            uint32_t *)&indices[copied_indices],ALIGN(MIN(2048,(indices_len-copied_indices)*sizeof(uint32_t)),8)));
-        copied_indices+=2048/sizeof(uint32_t);
-    }
-    DPU_ASSERT(dpu_copy_to(dpu_ranks[table_id], "input_offsets" , 0, (const uint32_t *)&offsets[0], ALIGN(
-        nr_batches*sizeof(uint32_t),8)));
-    DPU_ASSERT(dpu_copy_to(dpu_ranks[table_id], "input_nr_indices" , 0, &indices_len, sizeof(uint64_t)));
-    DPU_ASSERT(dpu_copy_to(dpu_ranks[table_id], "input_nr_offsets" , 0, &nr_batches, sizeof(uint64_t)));
-    // run dpus
-    //if (runtime_group && RT_CONFIG == RT_LAUNCH) TIME_NOW(&start);
+    DPU_ASSERT(dpu_prepare_xfer(dpu_ranks[table_id],indices));
+    DPU_ASSERT(dpu_push_xfer(dpu_ranks[table_id],DPU_XFER_TO_DPU,"input_indices",0,ALIGN(
+        indices_len*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
+    
+    DPU_ASSERT(dpu_prepare_xfer(dpu_ranks[table_id],offsets));
+    DPU_ASSERT(dpu_push_xfer(dpu_ranks[table_id],DPU_XFER_TO_DPU,"input_offsets",0,ALIGN(
+        nr_batches*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
+
+    DPU_ASSERT(dpu_prepare_xfer(dpu_ranks[table_id],indices));
+    DPU_ASSERT(dpu_push_xfer(dpu_ranks[table_id],DPU_XFER_TO_DPU,"input_indices",0,ALIGN(
+        indices_len*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
+
+    lengths.indices_len=indices_len;
+    lengths.nr_batches=nr_batches;
+    DPU_ASSERT(dpu_prepare_xfer(dpu_ranks[table_id],&lengths));
+    DPU_ASSERT(dpu_push_xfer(dpu_ranks[table_id],DPU_XFER_TO_DPU,"input_lengths",0,
+    sizeof(struct query_len),DPU_XFER_DEFAULT));
 
     DPU_ASSERT(dpu_launch(dpu_ranks[table_id], DPU_SYNCHRONOUS));
         
