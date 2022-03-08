@@ -17,3 +17,8 @@ struct embedding_table {
     struct dpu_set_t *rank;
     uint64_t nr_rows;
 };
+
+struct query_len {
+    uint32_t indices_len;
+    uint32_t nr_batches;
+}__attribute__((packed));
