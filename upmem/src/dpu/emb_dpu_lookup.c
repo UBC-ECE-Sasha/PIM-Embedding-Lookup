@@ -8,7 +8,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <defs.h>
-#include<barrier.h>
 #include <sem.h>
 
 __mram_noinit struct buffer_meta emb_buffer;
@@ -21,19 +20,20 @@ __mram_noinit int32_t results[MAX_NR_BATCHES];
 
 uint32_t indices_ptr[NR_TASKLETS];
 __dma_aligned struct buffer_meta table;
-//SEMAPHORE_INIT(first_run_sem,1);
+SEMAPHORE_INIT(first_run_sem,1);
 SEMAPHORE_INIT(result_sem,1);
-BARRIER_INIT(read_barrier, NR_TASKLETS);
 
 uint32_t indices_len, nr_batches, copied_indices;
 __dma_aligned struct query_len lengths;
 __dma_aligned uint32_t indices[32*MAX_NR_BATCHES], offsets[MAX_NR_BATCHES];
 __dma_aligned int32_t tmp_results[MAX_NR_BATCHES];
 
-//__host uint8_t first_run = 1;
+__host uint8_t first_run = 1;
 int
 main() {
-    if(me()==0){
+    __dma_aligned int32_t read_buff[2];  
+    sem_take(&first_run_sem);
+    if(first_run==1){
         mem_reset();
         copied_indices=0;
 
@@ -49,15 +49,14 @@ main() {
             copied_indices+=2048/sizeof(uint32_t);
         }
         mram_read(input_offsets,offsets,ALIGN(nr_batches*sizeof(uint32_t),8));
+        first_run=0;
     }
-    barrier_wait(&read_barrier);
-    
-    __dma_aligned int32_t read_buff[2];       
+    sem_give(&first_run_sem);
 
     if(me()!=0)
         indices_ptr[me()]=offsets[me()];
     else
-        indices_ptr[me()]=0;
+         indices_ptr[me()]=0;
 
     uint32_t last_written=0;
     for (uint64_t i=me(); i< nr_batches; i+=NR_TASKLETS){
@@ -83,5 +82,10 @@ main() {
             indices_ptr[me()]=offsets[i+NR_TASKLETS];
         }
     }
+    sem_take(&first_run_sem);
+     if(first_run==0){
+         first_run=1;
+     }
+     sem_give(&first_run_sem);
     return 0;
 }
