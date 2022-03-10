@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <defs.h>
+#include<barrier.h>
 #include <sem.h>
 
 __mram_noinit struct buffer_meta emb_buffer;
@@ -20,32 +21,25 @@ __mram_noinit int32_t results[MAX_NR_BATCHES];
 
 uint32_t indices_ptr[NR_TASKLETS];
 __dma_aligned struct buffer_meta table;
-SEMAPHORE_INIT(first_run_sem,1);
+//SEMAPHORE_INIT(first_run_sem,1);
 SEMAPHORE_INIT(result_sem,1);
+BARRIER_INIT(read_barrier, NR_TASKLETS);
 
 uint32_t indices_len, nr_batches, copied_indices;
 __dma_aligned struct query_len lengths;
 __dma_aligned uint32_t indices[32*MAX_NR_BATCHES], offsets[MAX_NR_BATCHES];
 __dma_aligned int32_t tmp_results[MAX_NR_BATCHES];
 
-__host uint8_t first_run = 1;
+//__host uint8_t first_run = 1;
 int
 main() {
-   /* __dma_aligned int32_t read_buff[8]; 
-    mram_read(&emb_data[0],&read_buff[0],32);
-    for (int i=0; i<4; i++)
-        printf("%d\n",read_buff[i]);*/
-    /*for (int i=0; i<8; i++)
-        printf("%d, ",read_buff[i]);
-    printf("\n------------\n"); */
-    sem_take(&first_run_sem);
-    if(first_run==1){
+    if(me()==0){
         mem_reset();
         copied_indices=0;
 
         mram_read(&emb_buffer, &table, ALIGN(sizeof(struct buffer_meta),8));
 
-        mram_read(&input_lengths, &lengths, sizeof(struct query_len));
+        mram_read(&input_lengths, &lengths, ALIGN(sizeof(struct query_len),8));
         indices_len=lengths.indices_len;
         nr_batches=lengths.nr_batches;
 
@@ -55,9 +49,8 @@ main() {
             copied_indices+=2048/sizeof(uint32_t);
         }
         mram_read(input_offsets,offsets,ALIGN(nr_batches*sizeof(uint32_t),8));
-        first_run=0;
     }
-    sem_give(&first_run_sem);
+    barrier_wait(&read_barrier);
     
     __dma_aligned int32_t read_buff[2];       
 
@@ -67,7 +60,6 @@ main() {
         indices_ptr[me()]=0;
 
     uint32_t last_written=0;
-
     for (uint64_t i=me(); i< nr_batches; i+=NR_TASKLETS){
 
         tmp_results[i]=0;
@@ -91,10 +83,5 @@ main() {
             indices_ptr[me()]=offsets[i+NR_TASKLETS];
         }
     }
-    sem_take(&first_run_sem);
-    if(first_run==0){
-        first_run=1;
-    }
-    sem_give(&first_run_sem);
     return 0;
 }
