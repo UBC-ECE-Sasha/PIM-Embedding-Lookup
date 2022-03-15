@@ -22,7 +22,6 @@
 #    define DPU_BINARY "../upmem/emb_dpu_lookup" // Relative path regarding the PyTorch code
 #endif
 
-struct buffer_meta *buffer_meta[NR_COLS];
 int32_t* buffer_data[NR_COLS];
 struct dpu_set_t dpu_ranks[AVAILABLE_RANKS];
 
@@ -96,14 +95,6 @@ static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_row
     
     for(int j=0; j<NR_COLS; j++){
 
-        buffer_meta[j] = malloc(sizeof(struct buffer_meta));
-        if (buffer_meta[j] == NULL) {
-            return ENOMEM;
-        }
-
-        buffer_meta[j]->col_id= j;
-        buffer_meta[j]->table_id = table_id;
-
         size_t sz = nr_rows*sizeof(int32_t);
         buffer_data[j] = malloc(ALIGN(sz,8));
         if (buffer_data[j] == NULL) {
@@ -155,11 +146,6 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
 
     uint32_t len;
     uint8_t dpu_id,rank_id;
-    
-    DPU_FOREACH(set, dpu, dpu_id){
-        DPU_ASSERT(dpu_prepare_xfer(dpu,&buffer_meta[dpu_id][0]));
-    }
-    DPU_ASSERT(dpu_push_xfer(set,DPU_XFER_TO_DPU, "emb_buffer", 0, ALIGN(sizeof(struct buffer_meta), 8), DPU_XFER_DEFAULT));
 
     DPU_FOREACH(set, dpu, dpu_id){
         DPU_ASSERT(dpu_prepare_xfer(dpu, buffer_data[dpu_id]));
@@ -169,7 +155,6 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
 
     for (int i = 0; i < NR_COLS; i++){
         free(buffer_data[i]);
-        free(buffer_meta[i]);
     }
 
     dpu_ranks[table_id] = set;
@@ -222,6 +207,7 @@ int32_t* lookup(uint32_t* indices, uint32_t *offsets, uint64_t indices_len,
     sizeof(struct query_len),DPU_XFER_DEFAULT));
 
     DPU_ASSERT(dpu_launch(dpu_ranks[table_id], DPU_SYNCHRONOUS));
+    // can we run this async to do post-processing?
         
     /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {
         if(runtime_group[table_id].in_use >= runtime_group[table_id].length) {
