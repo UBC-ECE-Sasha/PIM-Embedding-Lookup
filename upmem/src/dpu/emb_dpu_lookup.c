@@ -10,7 +10,6 @@
 #include <defs.h>
 #include <sem.h>
 
-__mram_noinit struct buffer_meta emb_buffer;
 __mram_noinit struct query_len input_lengths;
 
 __mram_noinit int32_t emb_data[MEGABYTE(14)];
@@ -19,7 +18,6 @@ __mram_noinit uint32_t input_offsets[MAX_NR_BATCHES];
 __mram_noinit int32_t results[MAX_NR_BATCHES];
 
 uint32_t indices_ptr[NR_TASKLETS];
-__dma_aligned struct buffer_meta table;
 SEMAPHORE_INIT(first_run_sem,1);
 SEMAPHORE_INIT(result_sem,1);
 
@@ -36,8 +34,6 @@ main() {
     if(first_run==1){
         mem_reset();
         copied_indices=0;
-
-        mram_read(&emb_buffer, &table, ALIGN(sizeof(struct buffer_meta),8));
 
         mram_read(&input_lengths, &lengths, ALIGN(sizeof(struct query_len),8));
         indices_len=lengths.indices_len;

@@ -22,7 +22,6 @@
 #    define DPU_BINARY "../upmem/emb_dpu_lookup" // Relative path regarding the PyTorch code
 #endif
 
-struct buffer_meta *buffer_meta[NR_COLS];
 int32_t* buffer_data[NR_COLS];
 struct dpu_set_t dpu_set;
 bool first_run=true;
@@ -97,14 +96,6 @@ static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_row
     
     for(int j=0; j<NR_COLS; j++){
 
-        buffer_meta[j] = malloc(sizeof(struct buffer_meta));
-        if (buffer_meta[j] == NULL) {
-            return ENOMEM;
-        }
-
-        buffer_meta[j]->col_id= j;
-        buffer_meta[j]->table_id = table_id;
-
         size_t sz = nr_rows*sizeof(int32_t);
         buffer_data[j] = malloc(ALIGN(sz,8));
         if (buffer_data[j] == NULL) {
@@ -116,7 +107,6 @@ static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_row
         }
 
     }
-
     return 0;
 }
 
@@ -155,6 +145,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
         DPU_ASSERT(dpu_alloc(NR_COLS*NR_TABLES, NULL, &set));
         DPU_ASSERT(dpu_load(set, DPU_BINARY, NULL));
         dpu_set=set;
+        first_run=false;
     }
 
     uint32_t len;
@@ -162,11 +153,6 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
     
     DPU_RANK_FOREACH(set, dpu_rank, rank_id){
         if(rank_id==table_id){
-            DPU_FOREACH(dpu_rank, dpu, dpu_id){
-                DPU_ASSERT(dpu_prepare_xfer(dpu,&buffer_meta[dpu_id][0]));
-            }
-            DPU_ASSERT(dpu_push_xfer(dpu_rank,DPU_XFER_TO_DPU, "emb_buffer", 0, ALIGN(sizeof(struct buffer_meta), 8), DPU_XFER_DEFAULT));
-
             DPU_FOREACH(dpu_rank, dpu, dpu_id){
                 DPU_ASSERT(dpu_prepare_xfer(dpu, buffer_data[dpu_id]));
             }
@@ -177,7 +163,6 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
 
     for (int i = 0; i < NR_COLS; i++){
         free(buffer_data[i]);
-        free(buffer_meta[i]);
     }
     //TIME_NOW(&end);
 
@@ -197,13 +182,12 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
     Result:
     This function updates ans with the elements of the rows that we have lookedup
 */
-int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint64_t* indices_len,
-                uint64_t* nr_batches, float **final_results
+int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
+                uint32_t* nr_batches, float **final_results
                 //,dpu_runtime_group *runtime_group
                 ){
     //struct timespec start, end;
     int dpu_id,rank_id;
-    uint64_t copied_indices;
     struct dpu_set_t dpu_rank,dpu;
     struct query_len lengths[NR_TABLES];
 
