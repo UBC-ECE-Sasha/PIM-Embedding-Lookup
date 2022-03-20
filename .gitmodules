@@ -10,3 +10,6 @@
 [submodule "PIM-dlrm-new"]
 	path = PIM-dlrm-new
 	url = https://github.com/UBC-ECE-Sasha/PIM-dlrm-new.git
+[submodule "PIM-Pytorch"]
+	path = PIM-Pytorch
+	url = https://github.com/UBC-ECE-Sasha/PIM-Pytorch.git
