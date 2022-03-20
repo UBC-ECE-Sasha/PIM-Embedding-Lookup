@@ -97,7 +97,7 @@ static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_row
     for(int j=0; j<NR_COLS; j++){
 
         size_t sz = nr_rows*sizeof(int32_t);
-        buffer_data[j] = malloc(ALIGN(sz,8));
+        buffer_data[j] = (int32_t*)malloc(ALIGN(sz,8));
         if (buffer_data[j] == NULL) {
             return ENOMEM;
         }
@@ -206,8 +206,8 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
         nr_batches[0]*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
 
     DPU_RANK_FOREACH(dpu_set,dpu_rank,rank_id){
-        lengths[rank_id].indices_len=indices_len;
-        lengths[rank_id].nr_batches=nr_batches;
+        lengths[rank_id].indices_len=*indices_len;
+        lengths[rank_id].nr_batches=*nr_batches;
         DPU_ASSERT(dpu_prepare_xfer(dpu_rank,&lengths[rank_id]));
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set,DPU_XFER_TO_DPU,"input_lengths",0,
