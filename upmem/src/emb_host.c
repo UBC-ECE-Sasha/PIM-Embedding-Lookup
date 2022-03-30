@@ -23,8 +23,8 @@
 #endif
 
 int32_t* buffer_data[NR_COLS];
-struct dpu_set_t dpu_set;
 bool first_run=true;
+struct dpu_set_t *dpu_set;
 
 #define TIME_NOW(_t) (clock_gettime(CLOCK_MONOTONIC, (_t)))
 
@@ -122,7 +122,7 @@ static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_row
     corresponding table with the index of the first and last row held in each dpu.
 */
 
-void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu_runtime_totals *runtime){
+struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu_runtime_totals *runtime){
     struct timespec start, end;
 
     if(table_id>=AVAILABLE_RANKS){
@@ -140,18 +140,19 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
 
     //TIME_NOW(&start);
 
-    struct dpu_set_t set, dpu, dpu_rank;
+    struct dpu_set_t dpu, dpu_rank;
     if(first_run){
-        DPU_ASSERT(dpu_alloc(NR_COLS*NR_TABLES, NULL, &set));
-        DPU_ASSERT(dpu_load(set, DPU_BINARY, NULL));
-        dpu_set=set;
+        dpu_set=malloc(sizeof(struct dpu_set_t));
+        DPU_ASSERT(dpu_alloc(NR_COLS*NR_TABLES, NULL, dpu_set));
+        DPU_ASSERT(dpu_load(*dpu_set, DPU_BINARY, NULL));
         first_run=false;
     }
+    printf("dpu_set ptr in C populate:%p\n",dpu_set);
 
     uint32_t len;
     uint8_t dpu_id,rank_id;
     
-    DPU_RANK_FOREACH(set, dpu_rank, rank_id){
+    DPU_RANK_FOREACH(*dpu_set, dpu_rank, rank_id){
         if(rank_id==table_id){
             DPU_FOREACH(dpu_rank, dpu, dpu_id){
                 DPU_ASSERT(dpu_prepare_xfer(dpu, buffer_data[dpu_id]));
@@ -168,7 +169,7 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
 
     //if (runtime) runtime->execution_time_populate_copy_in += TIME_DIFFERENCE(start, end);
 
-    return;
+    return dpu_set;
 }
 
 
@@ -183,9 +184,10 @@ void populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu
     This function updates ans with the elements of the rows that we have lookedup
 */
 int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
-                uint32_t* nr_batches, float **final_results
+                uint32_t* nr_batches, float **final_results, struct dpu_set_t *dpu_set_ptr
                 //,dpu_runtime_group *runtime_group
                 ){
+    printf("dpu_set ptr in C lookup:%p\n",dpu_set_ptr);
     //struct timespec start, end;
     int dpu_id,rank_id;
     struct dpu_set_t dpu_rank,dpu;
@@ -193,31 +195,33 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
 
     //if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
 
-    DPU_RANK_FOREACH(dpu_set,dpu_rank,rank_id){
+    DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
         DPU_ASSERT(dpu_prepare_xfer(dpu_rank,indices[rank_id]));
+        printf("%d\n",rank_id);
     }
-    DPU_ASSERT(dpu_push_xfer(dpu_set,DPU_XFER_TO_DPU,"input_indices",0,ALIGN(
+    sleep(10);
+    DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_indices",0,ALIGN(
         indices_len[0]*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
 
-    DPU_RANK_FOREACH(dpu_set,dpu_rank,rank_id){
+    DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
         DPU_ASSERT(dpu_prepare_xfer(dpu_rank,offsets[rank_id]));
     }
-    DPU_ASSERT(dpu_push_xfer(dpu_set,DPU_XFER_TO_DPU,"input_offsets",0,ALIGN(
+    DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_offsets",0,ALIGN(
         nr_batches[0]*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
 
-    DPU_RANK_FOREACH(dpu_set,dpu_rank,rank_id){
+    DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
         lengths[rank_id].indices_len=*indices_len;
         lengths[rank_id].nr_batches=*nr_batches;
         DPU_ASSERT(dpu_prepare_xfer(dpu_rank,&lengths[rank_id]));
     }
-    DPU_ASSERT(dpu_push_xfer(dpu_set,DPU_XFER_TO_DPU,"input_lengths",0,
+    DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_lengths",0,
     sizeof(struct query_len),DPU_XFER_DEFAULT));
 
-    DPU_ASSERT(dpu_launch(dpu_set, DPU_ASYNCHRONOUS));
+    DPU_ASSERT(dpu_launch(*dpu_set_ptr, DPU_ASYNCHRONOUS));
 
     bool done[NR_TABLES], fault[NR_TABLES];
     int32_t tmp_results[NR_COLS][nr_batches[0]];
-    DPU_RANK_FOREACH(dpu_set,dpu_rank,rank_id){
+    DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
         dpu_status(dpu_rank, &done[rank_id], &fault[rank_id]);
         if(fault[rank_id]){
             fprintf(stderr,"%dth rank failed launching.\n",rank_id);
