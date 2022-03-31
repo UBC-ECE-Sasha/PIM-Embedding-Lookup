@@ -173,6 +173,23 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *ta
 }
 
 
+dpu_error_t* postprocess(dpu_set_t dpu_rank, uint32_t rank_id, float** final_results, uint32_t* nr_batches){
+    int32_t tmp_results[NR_COLS][nr_batches[0]];
+    dpu_set_t dpu;
+    uint32_t dpu_id;
+    DPU_FOREACH(dpu_rank, dpu, dpu_id){
+        DPU_ASSERT(dpu_prepare_xfer(dpu,&tmp_results[dpu_id][0]));
+    }
+    DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_FROM_DPU, "results",0,
+    ALIGN(sizeof(int32_t)*nr_batches[rank_id],8), DPU_XFER_DEFAULT));
+
+    for (int j=0; j<NR_COLS; j++){
+        for(int k=0; k<nr_batches[rank_id]; k++)
+            final_results[rank_id][k*NR_COLS+j]=(float)tmp_results[j][k]/pow(10,9);
+    }    
+}
+
+
 /*
     Params:
     1. ans: a pointer that be updated with the rows that we lookup
@@ -184,7 +201,7 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *ta
     This function updates ans with the elements of the rows that we have lookedup
 */
 int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
-                uint32_t* nr_batches, float **final_results, struct dpu_set_t *dpu_set_ptr
+                uint32_t* nr_batches, float** final_results, struct dpu_set_t *dpu_set_ptr
                 //,dpu_runtime_group *runtime_group
                 ){
     printf("dpu_set ptr in C lookup:%p\n",dpu_set_ptr);
@@ -218,28 +235,8 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     sizeof(struct query_len),DPU_XFER_DEFAULT));
 
     DPU_ASSERT(dpu_launch(*dpu_set_ptr, DPU_ASYNCHRONOUS));
-
-    bool done[NR_TABLES], fault[NR_TABLES];
-    int32_t tmp_results[NR_COLS][nr_batches[0]];
-    DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
-        dpu_status(dpu_rank, &done[rank_id], &fault[rank_id]);
-        if(fault[rank_id]){
-            fprintf(stderr,"%dth rank failed launching.\n",rank_id);
-            exit(1);
-        }
-        if(done[rank_id]){
-            DPU_FOREACH(dpu_rank, dpu, dpu_id){
-                DPU_ASSERT(dpu_prepare_xfer(dpu,&tmp_results[dpu_id][0]));
-            }
-            DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_FROM_DPU, "results",0,
-            ALIGN(sizeof(int32_t)*nr_batches[0],8), DPU_XFER_DEFAULT));
-
-            for (int j=0; j<NR_COLS; j++){
-                for(int k=0; k<nr_batches[0]; k++)
-                    final_results[rank_id][k*NR_COLS+j]=(float)tmp_results[j][k]/pow(10,9);
-            }
-        }
-    }     
+    DPU_ASSERT(dpu_callback(*dpu_set,post_process(dpu_rank,rank_id,final_results,nr_batches,DPU_CALLBACK_ASYNC)));
+    
     /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {
         if(runtime_group[table_id].in_use >= runtime_group[table_id].length) {
             TIME_NOW(&end);
