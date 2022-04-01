@@ -199,7 +199,6 @@ lookup(uint32_t **indices, uint32_t **offsets, uint32_t *indices_len, uint32_t *
 
     DPU_RANK_FOREACH(*dpu_set_ptr, dpu_rank, rank_id) {
         DPU_ASSERT(dpu_prepare_xfer(dpu_rank, indices[rank_id]));
-        printf("%d\n", rank_id);
     }
     sleep(10);
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr, DPU_XFER_TO_DPU, "input_indices", 0,
@@ -218,8 +217,11 @@ lookup(uint32_t **indices, uint32_t **offsets, uint32_t *indices_len, uint32_t *
     }
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr, DPU_XFER_TO_DPU, "input_lengths", 0,
                              sizeof(struct query_len), DPU_XFER_DEFAULT));
+    printf("query copied successfully\n");
 
     DPU_ASSERT(dpu_launch(*dpu_set_ptr, DPU_ASYNCHRONOUS));
+
+    printf("dpu launch done\n");
 
     bool done[NR_TABLES], fault[NR_TABLES];
     int32_t tmp_results[NR_COLS][nr_batches[0]];
