@@ -19,7 +19,7 @@
 #define RT_CONFIG 0
 
 #ifndef DPU_BINARY
-#    define DPU_BINARY "../upmem/emb_dpu_lookup" // Relative path regarding the PyTorch code
+#    define DPU_BINARY "/home/upmem0016/niloo/new_project/PIM-Embedding-Lookup/upmem/build/release/dpu/emb_dpu_lookup" // Relative path regarding the PyTorch code
 #endif
 
 int32_t* buffer_data[NR_COLS];
@@ -142,12 +142,11 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *ta
 
     struct dpu_set_t dpu, dpu_rank;
     if(first_run){
-        dpu_set=malloc(sizeof(struct dpu_set_t));
+        dpu_set=(struct dpu_set_t*)malloc(sizeof(struct dpu_set_t));
         DPU_ASSERT(dpu_alloc(NR_COLS*NR_TABLES, NULL, dpu_set));
         DPU_ASSERT(dpu_load(*dpu_set, DPU_BINARY, NULL));
         first_run=false;
     }
-    printf("dpu_set ptr in C populate:%p\n",dpu_set);
 
     uint32_t len;
     uint8_t dpu_id,rank_id;
@@ -173,22 +172,20 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *ta
 }
 
 
-dpu_error_t* postprocess(dpu_set_t dpu_rank, uint32_t rank_id, float** final_results, uint32_t* nr_batches){
-    int32_t tmp_results[NR_COLS][nr_batches[0]];
-    dpu_set_t dpu;
-    uint32_t dpu_id;
-    DPU_FOREACH(dpu_rank, dpu, dpu_id){
-        DPU_ASSERT(dpu_prepare_xfer(dpu,&tmp_results[dpu_id][0]));
-    }
-    DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_FROM_DPU, "results",0,
-    ALIGN(sizeof(int32_t)*nr_batches[rank_id],8), DPU_XFER_DEFAULT));
-
+dpu_error_t post_process(struct dpu_set_t dpu_rank, uint32_t rank_id, void *arg){
+    struct callback_input *input=(struct callback_input*)arg;
+    float** final_results=input->final_results;
+    uint32_t* nr_batches=input->nr_batches;
+    int32_t* tmp_results=input->tmp_results;
+    printf("before log read\n");
+    dpu_error_t status=DPU_OK;
+    printf("inside callbacnk:%d\n",rank_id);
     for (int j=0; j<NR_COLS; j++){
         for(int k=0; k<nr_batches[rank_id]; k++)
-            final_results[rank_id][k*NR_COLS+j]=(float)tmp_results[j][k]/pow(10,9);
-    }    
+            final_results[rank_id][k*NR_COLS+j]=(float)tmp_results[rank_id*j+k]/pow(10,9);
+    }
+    return status;
 }
-
 
 /*
     Params:
@@ -201,22 +198,19 @@ dpu_error_t* postprocess(dpu_set_t dpu_rank, uint32_t rank_id, float** final_res
     This function updates ans with the elements of the rows that we have lookedup
 */
 int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
-                uint32_t* nr_batches, float** final_results, struct dpu_set_t *dpu_set_ptr
+                uint32_t* nr_batches, float** final_results, void *dpu_set_ptr_untyped
                 //,dpu_runtime_group *runtime_group
                 ){
-    printf("dpu_set ptr in C lookup:%p\n",dpu_set_ptr);
+    struct dpu_set_t *dpu_set_ptr = (struct dpu_set_t *) dpu_set_ptr_untyped;
     //struct timespec start, end;
     int dpu_id,rank_id;
     struct dpu_set_t dpu_rank,dpu;
     struct query_len lengths[NR_TABLES];
 
     //if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
-
     DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
         DPU_ASSERT(dpu_prepare_xfer(dpu_rank,indices[rank_id]));
-        printf("%d\n",rank_id);
     }
-    sleep(10);
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_indices",0,ALIGN(
         indices_len[0]*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
 
@@ -233,10 +227,31 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     }
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_lengths",0,
     sizeof(struct query_len),DPU_XFER_DEFAULT));
+    printf("query copied\n");
 
     DPU_ASSERT(dpu_launch(*dpu_set_ptr, DPU_ASYNCHRONOUS));
-    DPU_ASSERT(dpu_callback(*dpu_set,post_process(dpu_rank,rank_id,final_results,nr_batches,DPU_CALLBACK_ASYNC)));
+    printf("launch done\n");
+
+    int32_t tmp_results[NR_TABLES*NR_COLS*nr_batches[0]];
+    uint32_t rank_cntr=0;
+    DPU_FOREACH(*dpu_set_ptr, dpu, dpu_id){
+        rank_cntr=dpu_id%NR_COLS;
+        DPU_ASSERT(dpu_prepare_xfer(dpu,&tmp_results[rank_cntr*dpu_id]));
+    }
+    DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr, DPU_XFER_FROM_DPU, "results",0,
+    ALIGN(sizeof(int32_t)*nr_batches[0],8), DPU_XFER_DEFAULT));
+    printf("Copies done\n");
     
+    struct callback_input callback_data;
+    callback_data.final_results=final_results;
+    callback_data.nr_batches=nr_batches;
+    callback_data.tmp_results=tmp_results;
+    printf("callback input allocated\n");
+    
+    DPU_ASSERT(dpu_callback(*dpu_set_ptr,post_process,(void*)&callback_data,DPU_CALLBACK_ASYNC));
+    printf("callback done3\n");
+    DPU_ASSERT(dpu_sync(*dpu_set_ptr));
+    printf("sync done\n");
     /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {
         if(runtime_group[table_id].in_use >= runtime_group[table_id].length) {
             TIME_NOW(&end);
