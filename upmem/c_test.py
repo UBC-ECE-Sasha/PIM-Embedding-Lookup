@@ -7,14 +7,14 @@ from dputypes import *
 # DEFAULTS #
 so_file = None
 my_functions = None
-num_dpu=1
+num_dpu=10
 num_batches=32
 
 # Defaults, can be overriden by cli arguments
 if __name__ != "__main__":
     so_file = "./emblib.so"
     my_functions = CDLL(os.path.abspath(so_file))
-    num_dpu=1
+    num_dpu=10
     num_batches= 32
 
 
@@ -36,33 +36,46 @@ def parse():
 def populate(config, runtimes):
     my_functions.populate_mram.argtypes = c_uint32, c_uint64, POINTER(c_int32), POINTER(DpuRuntimeTotals)
     my_functions.populate_mram.restype = None
-    data_ptr = (c_int32 * 32)(1, 2, 3, 4, 5, 6, 7, 8, 2, 4, 6, 8, 10, 12, 14, 16, 3, 6, 9, 12, 15, 18, 21, 24, 4, 8, 12, 16, 20, 24, 28, 32)
+    data_ptr = (c_int32 * 128)(1, 2, 3, 4, 5, 6, 7, 8, 2, 4, 6, 8, 10, 12, 14, 16, 3, 6, 9, 12, 15, 18, 21, 24, 4, 8, 12, 16, 20, 24, 28, 32,
+    1, 2, 3, 4, 5, 6, 7, 8, 2, 4, 6, 8, 10, 12, 14, 16, 3, 6, 9, 12, 15, 18, 21, 24, 4, 8, 12, 16, 20, 24, 28, 32,
+    1, 2, 3, 4, 5, 6, 7, 8, 2, 4, 6, 8, 10, 12, 14, 16, 3, 6, 9, 12, 15, 18, 21, 24, 4, 8, 12, 16, 20, 24, 28, 32,
+    1, 2, 3, 4, 5, 6, 7, 8, 2, 4, 6, 8, 10, 12, 14, 16, 3, 6, 9, 12, 15, 18, 21, 24, 4, 8, 12, 16, 20, 24, 28, 32)
+    global dpu_ptr
     for i in range (0, config.num_dpu):
-        my_functions.populate_mram(i, 4, data_ptr, runtimes)
+        dpu_ptr=my_functions.populate_mram(i, 4, data_ptr, runtimes)
 
 
 def lookup(config, runtime_group=None):
-    my_functions.lookup.argtypes = POINTER(c_uint32), POINTER(c_uint32), POINTER(c_uint64), POINTER(c_uint64), POINTER(c_int32), POINTER(DpuRuntimeGroup)
+    my_functions.lookup.argtypes = c_void_p, c_void_p, POINTER(c_uint32), POINTER(c_uint32), c_void_p, c_void_p #POINTER(DpuRuntimeGroup)
     my_functions.lookup.restype = None
-    indices=[]
-    offsets=[]
     indices_len=[]
     offsets_len=[]
+    indices_arr=[]
+    offsets_arr=[]
+    ans_arr=[]
     for i in range(0,config.num_dpu):
+        indices=[]
+        offsets=[]
         for j in range(0,num_batches):
             indices.extend([1,3,2,0])
             offsets.append(j*4)
+        indices_ptr = (c_uint32* (len(indices)))(*indices)
+        indices_arr.append(addressof(indices_ptr))
+        offsets_ptr = (c_uint32* (len(offsets)))(*offsets)
+        offsets_arr.append(addressof(offsets_ptr))
         indices_len.append(4*num_batches)
         offsets_len.append(num_batches)
+        ans=(c_float* (num_batches*64))(*[])
+        ans_arr.append(addressof(ans))
 
-    indices_ptr=(c_uint32 * len(indices))(*indices)
-    offsets_ptr=(c_uint32 * len(offsets))(*offsets)
-    indices_len_ptr=(c_uint64 * len(indices_len))(*indices_len)
-    offsets_len_ptr=(c_uint64 * len(offsets_len))(*offsets_len)
-    ans=(c_int32 * (num_batches*6*config.num_dpu))()
+    indices_arr_ptr= (c_void_p* (len(indices_arr)))(*indices_arr)
+    offsets_arr_ptr= (c_void_p* (len(offsets_arr)))(*offsets_arr)
+    indices_len_ptr=(c_uint32 * len(indices_len))(*indices_len)
+    offsets_len_ptr=(c_uint32 * len(offsets_len))(*offsets_len)
+    ans_arr_ptr= (c_void_p* (len(ans_arr)))(*ans_arr)
 
     for _ in range(1):
-        my_functions.lookup(indices_ptr, offsets_ptr, indices_len_ptr, offsets_len_ptr, ans, runtime_group)
+        my_functions.lookup(indices_arr_ptr, offsets_arr_ptr, indices_len_ptr, offsets_len_ptr, ans_arr_ptr, dpu_ptr)
 
     if runtime_group is not None:
         write_results(config, runtime_group)

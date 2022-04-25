@@ -25,11 +25,11 @@ uint32_t indices_len, nr_batches, copied_indices;
 __dma_aligned struct query_len lengths;
 __dma_aligned uint32_t indices[32*MAX_NR_BATCHES], offsets[MAX_NR_BATCHES];
 __dma_aligned int32_t tmp_results[MAX_NR_BATCHES];
+uint8_t first_run = 1;
 
-__host uint8_t first_run = 1;
 int
 main() {
-    __dma_aligned int32_t read_buff[2];  
+    //__dma_aligned int32_t read_buff[2];  
     sem_take(&first_run_sem);
     if(first_run==1){
         mem_reset();
@@ -52,7 +52,7 @@ main() {
     if(me()!=0)
         indices_ptr[me()]=offsets[me()];
     else
-         indices_ptr[me()]=0;
+        indices_ptr[me()]=0;
 
     uint32_t last_written=0;
     for (uint64_t i=me(); i< nr_batches; i+=NR_TASKLETS){
@@ -63,7 +63,8 @@ main() {
         {
             uint32_t ind = indices[indices_ptr[me()]];
             mram_read(&emb_data[ind],read_buff,8);
-            tmp_results[i]+=read_buff[((ind % 2) != 0)];
+            tmp_results[i]+=1;
+            read_buff[((ind % 2) != 0)];
             indices_ptr[me()]++;
         }
 
@@ -77,7 +78,7 @@ main() {
         if(i+NR_TASKLETS<nr_batches){
             indices_ptr[me()]=offsets[i+NR_TASKLETS];
         }
-    }
+    } 
     sem_take(&first_run_sem);
      if(first_run==0){
          first_run=1;

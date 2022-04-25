@@ -46,7 +46,7 @@ random_env() {
 }
 
 toy_env() {
-    export NR_COLS=8
+    export NR_COLS=64
     export DPU_TEST=1
     export NR_TASKLETS=1
 }
