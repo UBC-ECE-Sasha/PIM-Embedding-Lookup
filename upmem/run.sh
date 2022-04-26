@@ -88,7 +88,8 @@ random_run() {
 
 toy_run() {
     echo "DPU_TEST=${DPU_TEST}"
-    python3 "${cwd}/c_test.py"
+    bash "${cwd}/src/load_generator"
+    #python3 "${cwd}/c_test.py"
 }
 
 build_code() {

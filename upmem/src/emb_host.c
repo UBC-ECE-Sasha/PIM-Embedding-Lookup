@@ -122,8 +122,9 @@ static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_row
     corresponding table with the index of the first and last row held in each dpu.
 */
 
-struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu_runtime_totals *runtime){
-    struct timespec start, end;
+struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data){
+    //, dpu_runtime_totals *runtime){
+    //struct timespec start, end;
 
     if(table_id>=AVAILABLE_RANKS){
         fprintf(stderr,"%d ranks available but tried to load table %dth",AVAILABLE_RANKS,table_id);

@@ -29,7 +29,7 @@ uint8_t first_run = 1;
 
 int
 main() {
-    //__dma_aligned int32_t read_buff[2];  
+    __dma_aligned int32_t read_buff[2];  
     sem_take(&first_run_sem);
     if(first_run==1){
         mem_reset();
@@ -63,8 +63,7 @@ main() {
         {
             uint32_t ind = indices[indices_ptr[me()]];
             mram_read(&emb_data[ind],read_buff,8);
-            tmp_results[i]+=1;
-            read_buff[((ind % 2) != 0)];
+            tmp_results[i]+=read_buff[((ind % 2) != 0)];
             indices_ptr[me()]++;
         }
 
