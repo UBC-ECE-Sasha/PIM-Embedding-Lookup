@@ -55,8 +55,10 @@ float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t in
 }
 
 int main(){
+
 	synthetic_populate(10,64,10);
 	float** results=synthetic_inference(10,32,32,10,64);
+	
 }
 
 
