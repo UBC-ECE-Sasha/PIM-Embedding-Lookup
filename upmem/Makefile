@@ -2,8 +2,12 @@
 
 PROJECT             = emb_host
 PROJECT_LIB         = emblib.so
+TOY_PROJECT         = load_generator
+TOY_PROJECT_LIB     = loadgen.so
+
 EXE_DPU             ?= emb_dpu_lookup
-BUILD_DIR           ?= build
+BUILD_DIR           ?= build/app
+TOY_BUILD_DIR		?= build/toy
 NR_DPUS             ?= 64
 NR_TASKLETS         ?= 14
 COUNTER_CONFIG      ?= "COUNT_CYCLES"
@@ -34,6 +38,12 @@ APP_SOURCES         =
 APP_MAIN            = src/emb_host.c
 APP_OBJS            = $(patsubst %.c,$(BUILD_DIR)/%.o,$(APP_SOURCES) $(APP_MAIN))
 
+TOY_BIN             = $(TOYBUILD_DIR)/$(TOYPROJECT)
+TOY_LIB             = $(TOYBUILD_DIR)/$(TOYPROJECT_LIB)
+TOY_SOURCES         =
+TOY_MAIN            = src/emb_host.c
+TOY_OBJS            = $(patsubst %.c,$(TOYBUILD_DIR)/%.o,$(TOY_SOURCES) $(TOY_MAIN))
+
 # Includes
 INC                 = -Iinclude
 
@@ -52,6 +62,8 @@ COMMON_CFLAGS       = -lm --std=c11 -fPIC # -Wall -Wextra -MMD -Werror
 SHARED_CFLAGS       = -shared -Wl,-soname,$(PROJECT)
 DPU_OPTS            = `dpu-pkg-config --cflags --libs dpu`
 
+TOY_SHARED_CFLAGS   = -shared -Wl,-soname,$(TOY_PROJECT)
+
 # Tools
 CLANG_FORMAT        = clang-format
 
@@ -59,9 +71,11 @@ CLANG_FORMAT        = clang-format
 ifneq ($(DEBUG),)
   COMMON_CFLAGS     += -g -DDEBUG
   BUILD_DIR         := $(BUILD_DIR)/debug
+  TOY_BUILD_DIR         := $(TOY_BUILD_DIR)/debug
 else
   COMMON_CFLAGS     += -O3
   BUILD_DIR         := $(BUILD_DIR)/release
+  TOY_BUILD_DIR         := $(TOY_BUILD_DIR)/release
 endif
 
 CFLAGS              += $(COMMON_CFLAGS) \
@@ -102,7 +116,7 @@ SHOW_FORMAT         := $(SHOW_COMMAND) "[ FORMAT ]"
 ##############################################################################################
 DEFAULT_TARGET =  $(APP_BIN)
 
-all: $(DEFAULT_TARGET) $(APP_LIB) dpu
+all: $(DEFAULT_TARGET) $(APP_LIB) $(TOY_BIN) $(TOY_LIB) dpu
 .PHONY: all
 
 # Take care of compiler generated depedencies
@@ -123,6 +137,19 @@ $(BUILD_DIR)/%.o: %.c
 	$(SHOW_CC) $@
 	$(SILENCE)mkdir -p $(dir $@)
 	$(SILENCE)$(CC) $(CFLAGS) $(INC) -c $< -o $@ $(DPU_OPTS)
+
+$(TOY_BIN): $(TOY_OBJS)
+	$(SHOW_CC) $@
+	$(SILENCE)$(CC) -o $@ $(TOY_OBJS) $(DPU_OPTS)
+
+$(TOY_LIB): $(TOY_OBJS)
+	$(SHOW_CC) $@
+	$(SILENCE)$(CC) -o $@ $(TOY_OBJS) $(DPU_OPTS) $(TOY_SHARED_CFLAGS)
+
+$(TOY_BUILD_DIR)/%.o: %.c
+	$(SHOW_CC) $@
+	$(SILENCE)mkdir -p $(dir $@)
+	$(SILENCE)$(CC) $(CFLAGS) -c $< -o $@ $(DPU_OPTS)
 
 ##############################################################################################
 # DPU Application
@@ -154,6 +181,7 @@ dpu:
 clean:
 	$(SHOW_CLEAN) $(BUILD_DIR)
 	$(SILENCE)rm -rf $(BUILD_DIR)
+	$(SILENCE)rm -rf $(TOY_BUILD_DIR)
 
 .PHONY: clean
 
