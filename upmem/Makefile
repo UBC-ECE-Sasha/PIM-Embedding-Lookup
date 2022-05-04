@@ -2,6 +2,10 @@
 
 PROJECT             = emb_host
 PROJECT_LIB         = emblib.so
+
+LOADGEN_PROJECT     = load_generator
+LOADGEN_PROJECT_LIB = loadgen.so
+
 EXE_DPU             ?= emb_dpu_lookup
 BUILD_DIR           ?= build
 NR_DPUS             ?= 64
@@ -34,6 +38,12 @@ APP_SOURCES         =
 APP_MAIN            = src/emb_host.c
 APP_OBJS            = $(patsubst %.c,$(BUILD_DIR)/%.o,$(APP_SOURCES) $(APP_MAIN))
 
+LOADGEN_BIN         = $(BUILD_DIR)/$(LOADGEN_PROJECT)
+LOADGEN_LIB         = $(BUILD_DIR)/$(LOADGEN_PROJECT_LIB)
+LOADGEN_SOURCES     =
+LOADGEN_MAIN        = src/load_generator.c
+LOADGEN_OBJS        = $(patsubst %.c,$(BUILD_DIR)/%.o,$(LOADGEN_SOURCES) $(LOADGEN_MAIN))
+
 # Includes
 INC                 = -Iinclude
 
@@ -47,10 +57,11 @@ DEPS                = $(APP_OBJS:.o=.d) \
                       $(TEST_OBJS:.o=.d)
 
 # Compiler options
-CC                  = gcc
-COMMON_CFLAGS       = -lm --std=c11 -fPIC # -Wall -Wextra -MMD -Werror
-SHARED_CFLAGS       = -shared -Wl,-soname,$(PROJECT)
-DPU_OPTS            = `dpu-pkg-config --cflags --libs dpu`
+CC                    = gcc
+COMMON_CFLAGS         = -lm --std=c11 -fPIC # -Wall -Wextra -MMD -Werror
+SHARED_CFLAGS         = -shared -Wl,-soname,$(PROJECT)
+SHARED_LOADGEN_CFLAGS = -shared -Wl,-soname,$(LOADGEN_PROJECT)
+DPU_OPTS              = `dpu-pkg-config --cflags --libs dpu`
 
 # Tools
 CLANG_FORMAT        = clang-format
@@ -100,9 +111,9 @@ SHOW_FORMAT         := $(SHOW_COMMAND) "[ FORMAT ]"
 ##############################################################################################
 # Default target and help message
 ##############################################################################################
-DEFAULT_TARGET =  $(APP_BIN)
+DEFAULT_TARGET =  $(APP_BIN) $(LOADGEN_BIN)
 
-all: $(DEFAULT_TARGET) $(APP_LIB) dpu
+all: $(DEFAULT_TARGET) $(APP_LIB) $(LOADGEN_LIB) dpu
 .PHONY: all
 
 # Take care of compiler generated depedencies
@@ -118,6 +129,14 @@ $(APP_BIN): $(APP_OBJS)
 $(APP_LIB): $(APP_OBJS)
 	$(SHOW_CC) $@
 	$(SILENCE)$(CC) -o $@ $(APP_OBJS) $(DPU_OPTS) $(SHARED_CFLAGS)
+
+$(LOADGEN_BIN): $(LOADGEN_OBJS)
+	$(SHOW_CC) $@
+	$(SILENCE)$(CC) -o $@ $(LOADGEN_OBJS) $(DPU_OPTS)
+
+$(LOADGEN_LIB): $(LOADGEN_OBJS)
+	$(SHOW_CC) $@
+	$(SILENCE)$(CC) -o $@ $(LOADGEN_OBJS) $(DPU_OPTS) $(SHARED_LOADGEN_CFLAGS)
 
 $(BUILD_DIR)/%.o: %.c
 	$(SHOW_CC) $@

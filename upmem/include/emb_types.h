@@ -1,3 +1,6 @@
+#ifndef __EMB_TYPES_H
+#define __EMB_TYPES_H
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -28,3 +31,5 @@ struct callback_input{
     uint32_t* nr_batches;
     int32_t* tmp_results;
 };
+
+#endif // __EMB_TYPES_H
