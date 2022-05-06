@@ -31,7 +31,8 @@ VERSION             = 0.0.0
 APP_BIN             = $(BUILD_DIR)/$(PROJECT)
 APP_LIB             = $(BUILD_DIR)/$(PROJECT_LIB)
 APP_SOURCES         =
-APP_MAIN            = src/emb_host.c
+# APP_MAIN            = src/emb_host.c
+APP_MAIN            = src/load_generator.c
 APP_OBJS            = $(patsubst %.c,$(BUILD_DIR)/%.o,$(APP_SOURCES) $(APP_MAIN))
 
 # Includes
@@ -162,7 +163,7 @@ clean:
 ##############################################################################################
 format:
 	$(SHOW_FORMAT) $@
-	$(SILENCE)$(CLANG_FORMAT) -i src/*.c # src/*.h include/*.h
+	$(SILENCE)$(CLANG_FORMAT) -i src/*.c src/*.h include/*.h include/host/include/*.h
 	$(SILENCE)$(MAKE) format -C src/dpu
 
 .PHONY: format

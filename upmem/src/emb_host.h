@@ -257,6 +257,3 @@ lookup(uint32_t **indices, uint32_t **offsets, uint32_t *indices_len, uint32_t *
     } */
     return 0;
 }
-int
-main() {
-}
