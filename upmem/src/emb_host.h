@@ -150,6 +150,8 @@ populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data,
     }
     printf("dpu_set ptr in C populate:%p\n", dpu_set);
 
+    printf("DEBUG: Check env variables:\n    NR_COLS     = %d,\n    NR_TABLES   = %d,\n    NR_TASKLETS = %d,\n    NR_ROWS     = %d\n", NR_COLS, NR_TABLES, NR_TASKLETS, nr_rows);   //del
+
     uint32_t len;
     uint8_t dpu_id, rank_id;
 
@@ -163,13 +165,14 @@ populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data,
         }
     }
 
+    printf("DEBUG: Copied to DPU\n");   //del
     for (int i = 0; i < NR_COLS; i++) {
         free(buffer_data[i]);
     }
     // TIME_NOW(&end);
 
     // if (runtime) runtime->execution_time_populate_copy_in += TIME_DIFFERENCE(start, end);
-
+    printf("DEBUG: populate_mram() done\n");
     return dpu_set;
 }
 

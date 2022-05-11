@@ -45,10 +45,19 @@ random_env() {
     export NR_TASKLETS=14
 }
 
+# Old - pre-loadgenerator
+# toy_env() {
+#     export NR_TABLES=1
+#     export NR_COLS=8
+#     export DPU_TEST=1
+#     export NR_TASKLETS=1
+# }
 toy_env() {
-    export NR_COLS=8
+    export NR_TABLES=10
+    export NR_COLS=32
+    export NR_BATCHES=16
     export DPU_TEST=1
-    export NR_TASKLETS=1
+    # rows?
 }
 
 global_env() {
@@ -88,7 +97,7 @@ random_run() {
 
 toy_run() {
     echo "DPU_TEST=${DPU_TEST}"
-    python3 "${cwd}/c_test.py"
+    ./emb_host
 }
 
 build_code() {

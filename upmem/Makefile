@@ -5,11 +5,11 @@ PROJECT_LIB         = emblib.so
 EXE_DPU             ?= emb_dpu_lookup
 BUILD_DIR           ?= build
 NR_DPUS             ?= 32
-NR_TASKLETS         ?= 14
+NR_TASKLETS         ?= 16
 COUNTER_CONFIG      ?= "COUNT_CYCLES"
 SHOW_DPU_LOGS       ?= 1
 MAX_ENC_BUFFER_MB   ?= 1
-NR_TABLES           ?= 8
+NR_TABLES           ?= 10
 MAX_NR_BATCHES      ?= 32
 RT_CONFIG           ?= "ALL"
 
@@ -17,8 +17,8 @@ RT_CONFIG           ?= "ALL"
 DPU_TEST            ?= 0
 
 ifeq ($(DPU_TEST),1)
-  NR_COLS             ?= 6
-  NR_DPUS             = 8
+  NR_COLS             ?= 32
+  NR_DPUS             = 32
 else
   NR_COLS             ?= 16
   NR_DPUS             ?= 32
