@@ -76,6 +76,9 @@ int main(){
 	printf("DEBUG: Done synthetic_populate(), starting synthetic_inference()...\n");
 	float** results=synthetic_inference(10,32,32,10,32);
 
+	
+	printf("DEBUG: Done synthetic_inference().\n");
+
 }
 
 
