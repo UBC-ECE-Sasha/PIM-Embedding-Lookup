@@ -21,7 +21,7 @@ void synthetic_populate(uint32_t nr_rows, uint32_t nr_cols, uint32_t nr_tables){
 
 float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t indices_per_batch,
  uint32_t nr_rows, uint32_t nr_cols){
-	 printf("DEBUG: In synthetic_inference()\n");
+	printf("DEBUG: In synthetic_inference()\n");
 
 	uint32_t** synthetic_indices=(uint32_t**)malloc(nr_tables*sizeof(uint32_t*));
 	uint32_t** synthetic_offsets=(uint32_t**)malloc(nr_tables*sizeof(uint32_t*));
@@ -43,7 +43,6 @@ float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t in
 			synthetic_offsets[k][i]=i*indices_per_batch;
 			for (int j=0; j<indices_per_batch; j++){
 				synthetic_indices[k][i*indices_per_batch+j]=(uint32_t)((double)rand()/RAND_MAX*nr_rows);
-
 			}
 		}
 	}
@@ -52,6 +51,7 @@ float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t in
 
 	lookup(synthetic_indices, synthetic_offsets, synthetic_indices_len,
                 synthetic_nr_batches, final_results,(void*)dpu_set);
+	printf("DEBUG: synthetic_inference() - Done lookup.\n");
 	for (int k=0; k<nr_tables; k++){
 		free(synthetic_indices[k]);
 		free(synthetic_offsets[k]);
@@ -64,17 +64,17 @@ float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t in
 
 int main(){
 	/* NR_COLS   			= 32
-	 * NR_ROWS  		 	= 10
+	 * NR_ROWS  		 	= 7000
 	 * NR_TABLES			= 10
-	 * NR_BATCHES 			= 32
+	 * NR_BATCHES 			= 64
 	 * indices_per_batch 	= 32
 	*/
 
 	printf("DEBUG: Starting synthetic_populate()...\n");
-	synthetic_populate(10,32,10);
+	synthetic_populate(7000,32,10);
 
 	printf("DEBUG: Done synthetic_populate(), starting synthetic_inference()...\n");
-	float** results=synthetic_inference(10,32,32,10,32);
+	float** results=synthetic_inference(10,64,32,7000,32);
 
 	
 	printf("DEBUG: Done synthetic_inference().\n");

@@ -41,7 +41,7 @@ kaggle_env() {
 random_env() {
     export NR_TABLES=10
     export NR_COLS=64
-    export MAX_NR_BATCHES=128
+    export MAX_NR_BATCHES=64
     export NR_TASKLETS=14
 }
 
@@ -55,8 +55,9 @@ random_env() {
 toy_env() {
     export NR_TABLES=10
     export NR_COLS=32
-    export NR_BATCHES=16
+    export NR_BATCHES=64
     export DPU_TEST=1
+    export MAX_NR_BATCHES=64
     # rows?
 }
 
