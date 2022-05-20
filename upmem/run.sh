@@ -39,7 +39,7 @@ kaggle_env() {
 }
 
 random_env() {
-    export NR_TABLES=10
+    export NR_TABLES=4
     export NR_COLS=64
     export MAX_NR_BATCHES=128
     export NR_TASKLETS=14
