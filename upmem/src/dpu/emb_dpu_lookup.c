@@ -15,7 +15,7 @@ __mram_noinit struct query_len input_lengths;
 __mram_noinit int32_t emb_data[MEGABYTE(14)];
 __mram_noinit uint32_t input_indices[32*MAX_NR_BATCHES];
 __mram_noinit uint32_t input_offsets[MAX_NR_BATCHES];
-__mram_noinit int32_t results[MAX_NR_BATCHES];
+__mram int32_t results[MAX_NR_BATCHES];
 
 uint32_t indices_ptr[NR_TASKLETS];
 SEMAPHORE_INIT(first_run_sem,1);
