@@ -221,7 +221,7 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
         if(rank_id<NR_TABLES)
             DPU_ASSERT(dpu_prepare_xfer(dpu_rank,offsets[rank_id]));
     }
-    printf("%d\n",ALIGN(nr_batches[0]*sizeof(uint32_t),8));
+    printf("%lu\n",ALIGN(nr_batches[0]*sizeof(uint32_t),8));
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_offsets",0,ALIGN(
         nr_batches[0]*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
     printf("copied offsets\n");
