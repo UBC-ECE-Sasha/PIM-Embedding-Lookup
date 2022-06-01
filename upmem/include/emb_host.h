@@ -201,7 +201,7 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
                 uint32_t* nr_batches, float** final_results, void *dpu_set_ptr_untyped
                 //,dpu_runtime_group *runtime_group
                 ){
-    printf("starting lookup\n");
+    //printf("starting lookup\n");
     struct dpu_set_t *dpu_set_ptr = (struct dpu_set_t *) dpu_set_ptr_untyped;
     //struct timespec start, end;
     int dpu_id,rank_id;
@@ -215,16 +215,16 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     }
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_indices",0,ALIGN(
         indices_len[0]*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
-    printf("copied indices\n");
+    //printf("copied indices\n");
 
     DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
         if(rank_id<NR_TABLES)
             DPU_ASSERT(dpu_prepare_xfer(dpu_rank,offsets[rank_id]));
     }
-    printf("%d\n",ALIGN(nr_batches[0]*sizeof(uint32_t),8));
+    //printf("%d\n",ALIGN(nr_batches[0]*sizeof(uint32_t),8));
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_offsets",0,ALIGN(
         nr_batches[0]*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
-    printf("copied offsets\n");
+    //printf("copied offsets\n");
 
     DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
         if(rank_id<NR_TABLES){
@@ -235,39 +235,40 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     }
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_lengths",0,
     sizeof(struct query_len),DPU_XFER_DEFAULT));
-    printf("query copied\n");
+    //printf("query copied\n");
 
     DPU_ASSERT(dpu_launch(*dpu_set_ptr, DPU_ASYNCHRONOUS));
-    printf("launch done\n");
+    //printf("launch done\n");
 
     int32_t ***tmp_results=(int32_t***)malloc(NR_TABLES*sizeof(int32_t**));
     uint32_t rank_cntr=0;
-    printf("wanna copy\n");
+    //printf("wanna copy\n");
     DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
         if(rank_id<NR_TABLES){
             tmp_results[rank_id]=(int32_t**)malloc(NR_COLS*sizeof(int32_t*));
             DPU_FOREACH(dpu_rank, dpu, dpu_id){
                 if(dpu_id<NR_COLS){
+                    //printf("%d: %d\n",rank_id, dpu_id);
                     tmp_results[rank_id][dpu_id]=(int32_t*)malloc(nr_batches[0]*sizeof(int32_t));
                     DPU_ASSERT(dpu_prepare_xfer(dpu,&tmp_results[rank_id][dpu_id][0]));
                 }
             }
         }
     }
-    printf("copying back\n");
+    //printf("copying back\n");
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr, DPU_XFER_FROM_DPU, "results", 0, ALIGN(sizeof(int32_t)*nr_batches[0],8), DPU_XFER_DEFAULT));
-    printf("Copies done\n");
+    //printf("Copies done\n");
     
     struct callback_input callback_data;
     callback_data.final_results=final_results;
     callback_data.nr_batches=nr_batches;
     callback_data.tmp_results=tmp_results;
-    printf("callback input allocated\n");
+    //printf("callback input allocated\n");
     
     DPU_ASSERT(dpu_callback(*dpu_set_ptr,post_process,(void*)&callback_data,DPU_CALLBACK_ASYNC));
-    printf("callback done3\n");
+    //printf("callback done3\n");
     DPU_ASSERT(dpu_sync(*dpu_set_ptr));
-    printf("sync done\n");
+    //printf("sync done\n");
     /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {
         if(runtime_group[table_id].in_use >= runtime_group[table_id].length) {
             TIME_NOW(&end);
