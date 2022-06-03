@@ -265,7 +265,7 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     printf("callback input allocated\n");
     
     DPU_ASSERT(dpu_callback(*dpu_set_ptr,post_process,(void*)&callback_data,DPU_CALLBACK_ASYNC));
-    printf("callback done3\n");
+    printf("callback done\n");
     DPU_ASSERT(dpu_sync(*dpu_set_ptr));
     printf("sync done\n");
     /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {

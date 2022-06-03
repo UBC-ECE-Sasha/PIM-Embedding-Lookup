@@ -63,18 +63,18 @@ float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t in
 }
 
 int main(){
-	/* NR_COLS   			= 32
-	 * NR_ROWS  		 	= 7000
-	 * NR_TABLES			= 10
+	/* NR_COLS   			= 64
+	 * NR_ROWS  		 	= 50000
+	 * NR_TABLES			= 9
 	 * NR_BATCHES 			= 64
 	 * indices_per_batch 	= 32
 	*/
 
 	printf("DEBUG: Starting synthetic_populate()...\n");
-	synthetic_populate(7000,32,10);
+	synthetic_populate(50000,64,9);
 
 	printf("DEBUG: Done synthetic_populate(), starting synthetic_inference()...\n");
-	float** results=synthetic_inference(10,64,32,7000,32);
+	float** results=synthetic_inference(9,64,32,50000,64);
 
 	
 	printf("DEBUG: Done synthetic_inference().\n");
