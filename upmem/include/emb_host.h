@@ -140,10 +140,10 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *ta
 
     //TIME_NOW(&start);
 
-    struct dpu_set_t dpu, dpu_rank;
+    struct dpu_set_t dpu;
     if(first_run){
         dpu_set=(struct dpu_set_t*)malloc(sizeof(struct dpu_set_t));
-        DPU_ASSERT(dpu_alloc(64*NR_TABLES, NULL, dpu_set));
+        DPU_ASSERT(dpu_alloc(NR_COLS*NR_TABLES, NULL, dpu_set));
         DPU_ASSERT(dpu_load(*dpu_set, DPU_BINARY, NULL));
         first_run=false;
     }
@@ -151,19 +151,16 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *ta
     uint32_t len;
     uint8_t dpu_id,rank_id;
     
-    DPU_RANK_FOREACH(*dpu_set, dpu_rank, rank_id){
-        if(rank_id==table_id){
-            DPU_FOREACH(dpu_rank, dpu, dpu_id){
-                DPU_ASSERT(dpu_prepare_xfer(dpu, buffer_data[dpu_id]));
-            }
-            DPU_ASSERT(dpu_push_xfer(dpu_rank,DPU_XFER_TO_DPU, "emb_data", 0, ALIGN(nr_rows*sizeof(int32_t),8), DPU_XFER_DEFAULT));
+    DPU_FOREACH(*dpu_set, dpu, dpu_id){
+        if(dpu_id<(table_id+1)*NR_COLS && dpu_id>table_id*NR_COLS){
+            DPU_ASSERT(dpu_prepare_xfer(dpu, buffer_data[dpu_id-(table_id*NR_COLS)]));
         }
     }
+    DPU_ASSERT(dpu_push_xfer(*dpu_set,DPU_XFER_TO_DPU, "emb_data", 0, ALIGN(nr_rows*sizeof(int32_t),8), DPU_XFER_DEFAULT));
 
 
-    for (int i = 0; i < NR_COLS; i++){
+    for (int i = 0; i < NR_COLS; i++)
         free(buffer_data[i]);
-    }
     //TIME_NOW(&end);
 
     //if (runtime) runtime->execution_time_populate_copy_in += TIME_DIFFERENCE(start, end);
@@ -180,9 +177,11 @@ dpu_error_t post_process(struct dpu_set_t dpu_rank, uint32_t rank_id, void *arg)
     //printf("before log read\n");
     dpu_error_t status=DPU_OK;
     //printf("inside callbacnk:%d\n",rank_id);
-    for (int j=0; j<NR_COLS; j++){
-        for(int k=0; k<nr_batches[rank_id]; k++)
-            final_results[rank_id][k*NR_COLS+j]=(float)input->tmp_results[rank_id][j][k]/pow(10,9);
+    if(rank_id<NR_TABLES){
+        for (int j=0; j<NR_COLS; j++){
+            for(int k=0; k<nr_batches[rank_id]; k++)
+                final_results[rank_id][k*NR_COLS+j]=(float)input->tmp_results[rank_id][j][k]/pow(10,9);
+        }
     }
     return status;
 }
@@ -204,56 +203,47 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     //printf("starting lookup\n");
     struct dpu_set_t *dpu_set_ptr = (struct dpu_set_t *) dpu_set_ptr_untyped;
     //struct timespec start, end;
-    int dpu_id,rank_id;
+    int dpu_id,table_id;
     struct dpu_set_t dpu_rank,dpu;
     struct query_len lengths[NR_TABLES];
 
     //if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
-    DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
-        if(rank_id<NR_TABLES)
-            DPU_ASSERT(dpu_prepare_xfer(dpu_rank,indices[rank_id]));
+    DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
+        DPU_ASSERT(dpu_prepare_xfer(dpu,indices[(int)(dpu_id/NR_COLS)]));
     }
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_indices",0,ALIGN(
         indices_len[0]*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
     //printf("copied indices\n");
 
-    DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
-        if(rank_id<NR_TABLES)
-            DPU_ASSERT(dpu_prepare_xfer(dpu_rank,offsets[rank_id]));
+    DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
+        DPU_ASSERT(dpu_prepare_xfer(dpu,offsets[(int)(dpu_id/NR_COLS)]));
     }
-    //printf("%d\n",ALIGN(nr_batches[0]*sizeof(uint32_t),8));
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_offsets",0,ALIGN(
         nr_batches[0]*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
     //printf("copied offsets\n");
 
-    DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
-        if(rank_id<NR_TABLES){
-            lengths[rank_id].indices_len=*indices_len;
-            lengths[rank_id].nr_batches=*nr_batches;
-            DPU_ASSERT(dpu_prepare_xfer(dpu_rank,&lengths[rank_id]));
-        }
+    DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
+        table_id=(int)(dpu_id/NR_COLS);
+        lengths[table_id].indices_len=*indices_len;
+        lengths[table_id].nr_batches=*nr_batches;
+        DPU_ASSERT(dpu_prepare_xfer(dpu,&lengths[table_id]));
     }
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_lengths",0,
-    sizeof(struct query_len),DPU_XFER_DEFAULT));
+        sizeof(struct query_len),DPU_XFER_DEFAULT));
     //printf("query copied\n");
 
     DPU_ASSERT(dpu_launch(*dpu_set_ptr, DPU_ASYNCHRONOUS));
     //printf("launch done\n");
 
     int32_t ***tmp_results=(int32_t***)malloc(NR_TABLES*sizeof(int32_t**));
-    uint32_t rank_cntr=0;
     //printf("wanna copy\n");
-    DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
-        if(rank_id<NR_TABLES){
-            tmp_results[rank_id]=(int32_t**)malloc(NR_COLS*sizeof(int32_t*));
-            DPU_FOREACH(dpu_rank, dpu, dpu_id){
-                if(dpu_id<NR_COLS){
-                    //printf("%d: %d\n",rank_id, dpu_id);
-                    tmp_results[rank_id][dpu_id]=(int32_t*)malloc(nr_batches[0]*sizeof(int32_t));
-                    DPU_ASSERT(dpu_prepare_xfer(dpu,&tmp_results[rank_id][dpu_id][0]));
-                }
-            }
+    DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
+        if(dpu_id%NR_COLS==0){
+            table_id=dpu_id/NR_COLS;
+            tmp_results[table_id]=(int32_t**)malloc(NR_COLS*sizeof(int32_t*));
         }
+        tmp_results[table_id][dpu_id%NR_COLS]=(int32_t*)malloc(nr_batches[0]*sizeof(int32_t));
+        DPU_ASSERT(dpu_prepare_xfer(dpu,&tmp_results[table_id][dpu_id%NR_COLS][0]));
     }
     //printf("copying back\n");
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr, DPU_XFER_FROM_DPU, "results", 0, ALIGN(sizeof(int32_t)*nr_batches[0],8), DPU_XFER_DEFAULT));

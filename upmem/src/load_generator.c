@@ -9,6 +9,7 @@
 #include <time.h>
 
 struct dpu_set_t* dpu_set;
+int32_t** emb_tables;
 
 struct timespec time_diff(struct timespec start, struct timespec end)
 {
@@ -25,13 +26,42 @@ struct timespec time_diff(struct timespec start, struct timespec end)
 
 void synthetic_populate(uint32_t nr_rows, uint32_t nr_cols, uint32_t nr_tables){
 	// dpu_runtime_totals testing;
+	emb_tables=(int32_t**)malloc(nr_tables*sizeof(int32_t*));
 	for (uint32_t k=0; k<nr_tables; k++){
 		int32_t* table_data=(int32_t*)malloc(nr_rows*nr_cols*sizeof(int32_t));
 		for (int i=0; i<nr_rows*nr_cols; i++)
 			table_data[i]=(int)rand();
 		dpu_set=populate_mram(k, nr_rows,table_data, NULL);
-		free(table_data);
+		emb_tables[k]=table_data;
+		//free(table_data);
 	}
+}
+
+bool validate_result(int32_t** emb_tables, uint32_t nr_tables,uint32_t** indices, uint32_t** offsets, 
+uint32_t* indices_len, uint32_t nr_batches, uint32_t nr_cols, float** results){
+	bool valid=true;
+	int32_t tmp_result[nr_cols];
+	uint32_t index=0;
+	for(int i=0; i<nr_tables; i++){
+		int ind_ptr=0;
+		for(int j=0; j<nr_batches; j++){
+			for(int t=0; t<nr_cols; t++)
+				tmp_result[t]=0;
+			while((ind_ptr<offsets[i][j+1] && j<nr_batches) ||
+				(j==nr_batches && ind_ptr<indices_len[i])){
+				index=indices[i][ind_ptr];
+				for(int t=0; t<nr_cols; t++)
+					tmp_result[t]+=emb_tables[i][index*nr_cols+t];
+				ind_ptr++;
+			}
+			for(int t=0; t<nr_cols; t++){
+				if(abs(results[i][j*nr_cols+t]*pow(10,9)-tmp_result[t])>1000)
+					valid=false;
+			}
+				
+		}
+	}
+	return valid;
 }
 
 float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t indices_per_batch,
@@ -62,7 +92,7 @@ float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t in
 		}
 	}
 
-	//printf("DEBUG: synthetic_inference() - Done loading synthetic data.\n");
+	printf("DEBUG: synthetic_inference() - Done loading synthetic data.\n");
 	struct timespec start, end, latency;
 	int sum=0;
 	for(int i=0; i<100; i++){
@@ -75,8 +105,13 @@ float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t in
 
 	printf("median latency:%d\n", sum/100);
 
+	/* bool valid=validate_result(emb_tables, nr_tables, synthetic_indices, synthetic_offsets, 
+		synthetic_indices_len, nr_batches, nr_cols, final_results);
+	printf("Validation result:");
+	printf(valid ? "true\n" : "false\n"); */
 
-	//printf("DEBUG: synthetic_inference() - Done lookup.\n");
+
+	printf("DEBUG: synthetic_inference() - Done lookup.\n");
 	for (int k=0; k<nr_tables; k++){
 		free(synthetic_indices[k]);
 		free(synthetic_offsets[k]);
@@ -89,17 +124,17 @@ float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t in
 
 int main(){
 	/* NR_COLS   			= 64
-	 * NR_ROWS  		 	= 200000
-	 * NR_TABLES			= 5
+	 * NR_ROWS  		 	= 50000
+	 * NR_TABLES			= 1
 	 * NR_BATCHES 			= 64
 	 * indices_per_batch 	= 32
 	*/
 
 	printf("DEBUG: Starting synthetic_populate()...\n");
-	synthetic_populate(200000,16,5);
+	synthetic_populate(50000,64,9);
 
 	printf("DEBUG: Done synthetic_populate(), starting synthetic_inference()...\n");
-	float** results=synthetic_inference(5,64,32,200000,16);
+	float** results=synthetic_inference(9,64,32,50000,64);
 	printf("DEBUG: Done synthetic_inference().\n");
 
 }
