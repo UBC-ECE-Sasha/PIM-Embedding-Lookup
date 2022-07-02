@@ -201,18 +201,50 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
                 uint32_t* nr_batches, float** final_results, void *dpu_set_ptr_untyped
                 //,dpu_runtime_group *runtime_group
                 ){
-    printf("starting lookup\n");
+    printf("test:\n");
+    // Check values in global pointers
+    for (int i = 0; i < 9; i++) {
+        // Print num of Indicies and Offsets
+        printf("C: #Indices: %d, #Offsets: %d\n",indices_len[i], nr_batches[i]);
+
+        // Print first 10 and last 10 indices
+        printf("C: Indices for table %d: [", i);
+        for (int j = 0; j < 9; j++) {
+            printf("%d, ", indices[i][j]);
+        }
+        printf(" ... ");
+        for (int j = 10; j > 0; j--) {
+            printf("%d, ", indices[i][2048 - j]);
+        }
+        printf("]\n");
+
+        // Print first 10 and last 10 offsets
+        printf("C: Offsets for table %d: [", i);
+        for (int j = 0; j < 10; j++) {
+            printf("%d, ", offsets[i][j]);
+        }
+        printf(" ... ");
+        for (int j = 10; j > 0; j--) {
+            printf("%d, ", offsets[i][64 - j]);
+        }
+        printf("]\n");
+    }
+
+    printf("starting lookup test\n");
     struct dpu_set_t *dpu_set_ptr = (struct dpu_set_t *) dpu_set_ptr_untyped;
+    printf("test\n");
     //struct timespec start, end;
     int dpu_id,rank_id;
     struct dpu_set_t dpu_rank,dpu;
     struct query_len lengths[NR_TABLES];
-
+    printf("starting indices copying\n");
     //if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
     DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
+        printf("rank_id: ", rank_id);
         if(rank_id<NR_TABLES)
             DPU_ASSERT(dpu_prepare_xfer(dpu_rank,indices[rank_id]));
     }
+    printf("prepared indices copying\n");
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_indices",0,ALIGN(
         indices_len[0]*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
     printf("copied indices\n");
