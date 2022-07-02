@@ -240,13 +240,13 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     printf("starting indices copying\n");
     //if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
     DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
-        printf("rank_id: ", rank_id);
+        printf("rank_id: %d\n", rank_id);
         if(rank_id<NR_TABLES)
             DPU_ASSERT(dpu_prepare_xfer(dpu_rank,indices[rank_id]));
     }
     printf("prepared indices copying\n");
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_indices",0,ALIGN(
-        indices_len[0]*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
+        (indices_len[0]-1)*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
     printf("copied indices\n");
 
     DPU_RANK_FOREACH(*dpu_set_ptr,dpu_rank,rank_id){
