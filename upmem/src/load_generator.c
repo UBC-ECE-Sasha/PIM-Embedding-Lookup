@@ -47,8 +47,8 @@ uint32_t* indices_len, uint32_t nr_batches, uint32_t nr_cols, float** results){
 		for(int j=0; j<nr_batches; j++){
 			for(int t=0; t<nr_cols; t++)
 				tmp_result[t]=0;
-			while((ind_ptr<offsets[i][j+1] && j<nr_batches) ||
-				(j==nr_batches && ind_ptr<indices_len[i])){
+			while((ind_ptr<offsets[i][j+1] && j<nr_batches-1) ||
+				(j==nr_batches - 1 && ind_ptr<indices_len[i])){
 				index=indices[i][ind_ptr];
 				for(int t=0; t<nr_cols; t++)
 					tmp_result[t]+=emb_tables[i][index*nr_cols+t];
@@ -105,10 +105,10 @@ float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t in
 
 	printf("median latency:%d\n", sum/100);
 
-	/* bool valid=validate_result(emb_tables, nr_tables, synthetic_indices, synthetic_offsets, 
+	bool valid=validate_result(emb_tables, nr_tables, synthetic_indices, synthetic_offsets, 
 		synthetic_indices_len, nr_batches, nr_cols, final_results);
 	printf("Validation result:");
-	printf(valid ? "true\n" : "false\n"); */
+	printf(valid ? "true\n" : "false\n");
 
 
 	printf("DEBUG: synthetic_inference() - Done lookup.\n");
