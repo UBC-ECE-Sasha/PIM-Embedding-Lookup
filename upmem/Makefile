@@ -1,172 +1,28 @@
-# Setting defaults
+.PHONY:all
 
-PROJECT             = emb_host
-PROJECT_LIB         = emblib.so
-EXE_DPU             ?= emb_dpu_lookup
-BUILD_DIR           ?= build
-NR_DPUS             ?= 640
-NR_TASKLETS         ?= 14
-COUNTER_CONFIG      ?= "COUNT_CYCLES"
-SHOW_DPU_LOGS       ?= 1
-MAX_ENC_BUFFER_MB   ?= 1
-NR_TABLES           ?= 9
-MAX_NR_BATCHES      ?= 128
-MAX_INDICES_PER_BATCH ?=32
-RT_CONFIG           ?= "ALL"
+NR_COLS=64
+NR_TABLES=9
+NR_BATCHES=64
+NR_RUN=100
+INDEX_PER_BATCH=32
+NR_ROWS=50000
+NR_EMBEDDING=9
 
-# TEST with c_test.py
-DPU_TEST            ?= 0
+build: build/emb build/embdpu
 
-ifeq ($(DPU_TEST),1)
-  NR_COLS             ?= 64
-  NR_DPUS             = 640
-else
-  NR_COLS             ?= 64
-  NR_DPUS             ?= 32
-endif
+build/emb: src/*.c include/*.h
+	mkdir -p build
+	gcc -O3 -g -Wall -msse4 -lm -lz -lpthread -I include -DNR_RUN=${NR_RUN} -DNR_EMBEDDING=${NR_EMBEDDING} -DINDEX_PER_BATCH=${INDEX_PER_BATCH} -DNR_ROWS=${NR_ROWS} -DNR_BATCHES=${NR_BATCHES} -DNR_TABLES=${NR_TABLES}  -DNR_COLS=${NR_COLS} -o build/emb src/*.c  `dpu-pkg-config --cflags --libs dpu` 
 
-# Version information
-VERSION             = 0.0.0
+build/embdpu: src/dpu/*.c 
+	mkdir -p build
+	# TODO : why flto fails
+	dpu-clang -g0 -O3 -flto=thin  -I include  -DNR_RUN=${NR_RUN}  -DNR_EMBEDDING=${NR_EMBEDDING} -DINDEX_PER_BATCH=${INDEX_PER_BATCH} -DNR_ROWS=${NR_ROWS}   -DNR_BATCHES=${NR_BATCHES} -o build/embdpu src/dpu/dpu_embedding.c
 
-# Application sources and artifacts
-APP_BIN             = $(BUILD_DIR)/$(PROJECT)
-APP_LIB             = $(BUILD_DIR)/$(PROJECT_LIB)
-APP_SOURCES         =
-# APP_MAIN            = src/emb_host.c
-APP_MAIN            = src/load_generator.c
-APP_OBJS            = $(patsubst %.c,$(BUILD_DIR)/%.o,$(APP_SOURCES) $(APP_MAIN))
-
-# Includes
-INC                 = -Iinclude
-
-# Test sources and artifacts
-TEST_BIN            = $(BUILD_DIR)/$(PROJECT)_tests
-TEST_SOURCES        = $(APP_SOURCES) tests/main.c
-TEST_OBJS           = $(patsubst %.c,$(BUILD_DIR)/tests/%.o,$(TEST_SOURCES))
-
-# Generated dependency files
-DEPS                = $(APP_OBJS:.o=.d) \
-                      $(TEST_OBJS:.o=.d)
-
-# Compiler options
-CC                  = gcc
-COMMON_CFLAGS       = -lm --std=c11 -fPIC # -Wall -Wextra -MMD -Werror
-SHARED_CFLAGS       = -shared -Wl,-soname,$(PROJECT)
-DPU_OPTS            = `dpu-pkg-config --cflags --libs dpu`
-
-# Tools
-CLANG_FORMAT        = clang-format
-
-# Debug/Release mode
-ifneq ($(DEBUG),)
-  COMMON_CFLAGS     += -O0 -g -DDEBUG
-  BUILD_DIR         := $(BUILD_DIR)/debug
-else
-  COMMON_CFLAGS     += -O0
-  BUILD_DIR         := $(BUILD_DIR)/release
-endif
-
-CFLAGS              += $(COMMON_CFLAGS) \
-                       -DVERSION=$(VERSION) \
-                       -DNR_DPUS=$(NR_DPUS) \
-                       -DNR_TASKLETS=$(NR_TASKLETS) \
-                       -DCOUNTER_CONFIG=$(COUNTER_CONFIG) \
-                       -DNR_TABLES=$(NR_TABLES) \
-                       -DNR_COLS=$(NR_COLS) \
-                       -DMAX_NR_BATCHES=$(MAX_NR_BATCHES) \
-                       -DMAX_INDICES_PER_BATCH=$(MAX_INDICES_PER_BATCH) \
-                       -DHOST=1 \
-                       -DDPU_BINARY=\"dpu/$(EXE_DPU)\" \
-                       -DMAX_ENC_BUFFER_MB="$(MAX_ENC_BUFFER_MB)" \
-                       -D_POSIX_C_SOURCE=199309L # For clock_gettime
-
-# define SHOW_DPU_LOGS in the source if we want DPU logs
-ifeq ($(SHOW_DPU_LOGS), 1)
-	CFLAGS+=-DSHOW_DPU_LOGS
-endif
-
-# Silence make
-ifneq ($(V),)
-  SILENCE           =
-else
-  SILENCE           = @
-endif
-
-# Fancy output
-SHOW_COMMAND        := @printf "%-15s%s\n"
-SHOW_CC             := $(SHOW_COMMAND) "[ $(CC) ]"
-SHOW_CLEAN          := $(SHOW_COMMAND) "[ CLEAN ]"
-SHOW_GEN            := $(SHOW_COMMAND) "[ GEN ]"
-SHOW_MAKE           := $(SHOW_COMMAND) "[ MAKE ]"
-SHOW_FORMAT         := $(SHOW_COMMAND) "[ FORMAT ]"
-
-##############################################################################################
-# Default target and help message
-##############################################################################################
-DEFAULT_TARGET =  $(APP_BIN)
-
-all: $(DEFAULT_TARGET) $(APP_LIB) dpu
-.PHONY: all
-
-# Take care of compiler generated depedencies
--include $(DEPS)
-
-##############################################################################################
-# Application
-##############################################################################################
-$(APP_BIN): $(APP_OBJS)
-	$(SHOW_CC) $@
-	$(SILENCE)$(CC) -o $@ $(APP_OBJS) $(DPU_OPTS)
-
-$(APP_LIB): $(APP_OBJS)
-	$(SHOW_CC) $@
-	$(SILENCE)$(CC) -o $@ $(APP_OBJS) $(DPU_OPTS) $(SHARED_CFLAGS)
-
-$(BUILD_DIR)/%.o: %.c
-	$(SHOW_CC) $@
-	$(SILENCE)mkdir -p $(dir $@)
-	$(SILENCE)$(CC) $(CFLAGS) $(INC) -c $< -o $@ $(DPU_OPTS)
-
-##############################################################################################
-# DPU Application
-##############################################################################################
-
-export BUILD_DIR
-export DEBUG
-export NR_DPUS
-export NR_TASKLETS
-export COUNTER_CONFIG
-export EXE_DPU
-export NR_TABLES
-export NR_COLS
-export MAX_NR_BATCHES
-export MAX_INDICES_PER_BATCH
-
-dpu:
-	$(SHOW_MAKE) $@
-	$(SILENCE)$(MAKE) -C src/dpu
-
-##############################################################################################
-# Tests
-##############################################################################################
-
-
-
-##############################################################################################
-# Cleanup
-##############################################################################################
 clean:
-	$(SHOW_CLEAN) $(BUILD_DIR)
-	$(SILENCE)rm -rf $(BUILD_DIR)
+	([ -d "build" ] && rm -r build/ && rm -f out.cpu.log out.dpu.log) || [ ! -d "build" ]
 
-.PHONY: clean
+testdpu: FORCE
+	./build/emb
 
-##############################################################################################
-# Format
-##############################################################################################
-format:
-	$(SHOW_FORMAT) $@
-	$(SILENCE)$(CLANG_FORMAT) -i src/*.c src/*.h include/*.h include/host/include/*.h
-	$(SILENCE)$(MAKE) format -C src/dpu
-
-.PHONY: format
+FORCE: ;

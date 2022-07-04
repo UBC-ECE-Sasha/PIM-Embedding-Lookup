@@ -1,5 +1,4 @@
-#include "emb_host.h"
-
+#include "embedding.h"
 #include <assert.h>
 #include <dpu.h>
 #include <math.h>
@@ -8,14 +7,11 @@
 #include <stdlib.h>
 #include <time.h>
 
-// NR_COLS   			= 64
-// NR_ROWS  		 	= 50000
-// NR_TABLES			= 1
-// NR_BATCHES 			= 64
-// indices_per_batch 	= 32
+static uint64_t NR_DPUS;
+
 
 /** @brief global referene to dpu_set */
-struct dpu_set_t *dpu_set;
+//struct dpu_set_t dpu_set;
 
 /** @brief host side embedding table buffer */
 static int32_t **emb_tables;
@@ -23,14 +19,8 @@ static int32_t **emb_tables;
 /** @brief number of inference to perform for a parameter set n times inference with given
  * parameters */
 
-static uint64_t NUM_RUN = 100;
-static uint64_t NR_BATCHES_ = MAX_NR_BATCHES;
-static uint64_t INDEX_PER_BATCH = 32;
-static uint64_t NR_ROWS = 50000;
-static uint64_t NR_COLS_ = NR_COLS;
 
-static uint64_t NR_EMBEDDING = 9;
-
+/* @brief final_results embedding lookup operationDPU results */
 static float **final_results;
 
 /** @brief compute time difference from to timespec */
@@ -63,10 +53,10 @@ synthetic_populate(uint32_t nr_rows, uint32_t nr_cols, uint32_t nr_embedding) {
         for (int i = 0; i < nr_rows * nr_cols; i++) {
             double data_norm = (double) (rand()) / RAND_MAX;
             table_data[i] = (int32_t) (UINT32_MAX * data_norm);
-        }
+        } 
 
         /* store one embedding to DPU MRAM */
-        dpu_set = populate_mram(k, nr_rows, table_data, NULL);
+        populate_mram(k, nr_rows, table_data, NULL);
         /* store one embedding to HOST BUFFER */
         emb_tables[k] = table_data;
         // free(table_data);
@@ -120,7 +110,10 @@ check_embedding_set_inference(int32_t **emb_tables, uint32_t nr_embedding, uint3
 
                 float dpu_result = results[embedding_index][batch_index * nr_cols + col_index];
                 float host_result = tmp_result[col_index];
-                // printf("%f %f \n", dpu_result  , host_result);
+                // printf("%f %f \n", dpu_result* pow(10, 9)  , host_result);
+                // printf("%f %f \n", dpu_result* pow(10, 9)  , host_result);
+                float diff = fabs(dpu_result * pow(10, 9) - host_result);
+                printf("[%d][%d][%d]diff %f\n", embedding_index, batch_index, col_index , diff);
                 /* check magnitude with arbitrary threshold */
                 if (fabs(dpu_result * pow(10, 9) - host_result) > 1000)
                     valid = false;
@@ -132,6 +125,7 @@ check_embedding_set_inference(int32_t **emb_tables, uint32_t nr_embedding, uint3
 
 /** @brief perform DPU embedding table inference given input indices with multiple embedding and
    multiple batch
+    @param final_results embedding lookup operation DPU results
     @param nr_embedding number of embedding in emb_tables
     @param nr_batches gives the number of batch (same for each embedding) in indices
     @param indices_pet_batch numbr of indices per batch
@@ -166,17 +160,16 @@ synthetic_inference(float **final_results, uint32_t nr_embedding, uint32_t nr_ba
 
     struct timespec start, end, latency;
     int sum = 0;
-    for (int i = 0; i < NUM_RUN; i++) {
+    for (int i = 0; i < NR_RUN; i++) {
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
-        lookup(indices, offsets, indices_len, nr_batches_per_embedding, final_results,
-               (void *) dpu_set);
+        lookup(indices, offsets, indices_len, nr_batches_per_embedding, final_results);
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
         sum += time_diff(start, end).tv_nsec;
     }
     bool valid = check_embedding_set_inference(emb_tables, nr_embedding, indices, offsets,
                                                indices_len, nr_batches, nr_cols, final_results);
-    printf("inference : median latency [ms]: %lf, OK ? %d \n", 1e-6 * (double) sum / NUM_RUN,
-           (int) valid);
+    // printf("inference : median latency [ms]: %lf, OK ? %d \n", 1e-6 * (double) sum / NR_RUN,
+    //        (int) valid);
     for (int k = 0; k < nr_embedding; k++) {
         free(indices[k]);
         free(offsets[k]);
@@ -193,11 +186,16 @@ main() {
     {
         final_results = (float **) malloc(NR_EMBEDDING * sizeof(float *));
         for (int k = 0; k < NR_EMBEDDING; k++) {
-            final_results[k] = (float *) malloc(NR_BATCHES_ * NR_COLS_ * sizeof(uint32_t));
+            final_results[k] = (float *) malloc(NR_BATCHES * NR_COLS * sizeof(uint32_t));
         }
     }
-    synthetic_populate(NR_ROWS, NR_COLS_, NR_EMBEDDING);
-    synthetic_inference(final_results, NR_EMBEDDING, NR_BATCHES_, INDEX_PER_BATCH, NR_ROWS,
+
+    NR_DPUS = NR_COLS * NR_TABLES;
+    
+	printf("alloc dpus %lu \n", NR_DPUS);
+	alloc_dpus(NR_DPUS);
+    synthetic_populate(NR_ROWS, NR_COLS, NR_EMBEDDING);
+    synthetic_inference(final_results, NR_EMBEDDING, NR_BATCHES, INDEX_PER_BATCH, NR_ROWS,
                         NR_COLS);
     free(final_results);
 }
