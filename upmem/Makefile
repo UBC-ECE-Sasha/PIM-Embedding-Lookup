@@ -59,10 +59,10 @@ CLANG_FORMAT        = clang-format
 
 # Debug/Release mode
 ifneq ($(DEBUG),)
-  COMMON_CFLAGS     += -g -DDEBUG
+  COMMON_CFLAGS     += -O0 -g -DDEBUG
   BUILD_DIR         := $(BUILD_DIR)/debug
 else
-  COMMON_CFLAGS     += -O3
+  COMMON_CFLAGS     += -O0
   BUILD_DIR         := $(BUILD_DIR)/release
 endif
 
