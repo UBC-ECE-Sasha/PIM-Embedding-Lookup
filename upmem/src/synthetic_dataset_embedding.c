@@ -59,7 +59,7 @@ synthetic_populate(int32_t **emb_tables, uint32_t nr_rows, uint32_t nr_cols,
         /* synthetize embedding table parameters */
         for (int i = 0; i < nr_rows * nr_cols; i++) {
             double data_norm = (double) (rand()) / RAND_MAX / INDEX_PER_BATCH;
-            emb_tables[embedding_index][i] = (int32_t) (UINT32_MAX * data_norm);
+            emb_tables[embedding_index][i] = (int32_t) (INT32_MAX * data_norm);
             // table_data[i] = (int32_t) i;
         }
     }
