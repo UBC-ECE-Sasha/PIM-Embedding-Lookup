@@ -63,7 +63,7 @@ populate_mram(uint64_t nr_embedding, uint64_t nr_rows, uint64_t nr_cols, int32_t
     uint64_t cur_emb_cols = 0;
     DPU_FOREACH(dpu_set, dpu, dpu_index) {
         /* set start addr of each transposed column */
-        uint64_t col_start_addr = dpu_index * nr_rows;
+        uint64_t col_start_addr = cur_emb_cols * nr_rows;
         DPU_ASSERT(dpu_prepare_xfer(dpu, &(buffer_data[embedding_index][col_start_addr])));
 
         cur_emb_cols++;
