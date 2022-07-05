@@ -4,25 +4,18 @@
 
 /** @brief host side embedding table buffer */
 int32_t *buffer_data[NR_COLS];
+
 /** @brief global referene to dpu_set */
 struct dpu_set_t dpu_set;
 
-bool first_run = true;
-
-static void
-enomem() {
-    fprintf(stderr, "Out of memory\n");
-    exit(ENOMEM);
-}
-
-static void
-copy_interval(dpu_runtime_interval *interval, struct timespec *const start,
-              struct timespec *const end) {
-    interval->start.tv_nsec = start->tv_nsec;
-    interval->start.tv_sec = start->tv_sec;
-    interval->stop.tv_nsec = end->tv_nsec;
-    interval->stop.tv_sec = end->tv_sec;
-}
+// static void
+// copy_interval(dpu_runtime_interval *interval, struct timespec *const start,
+//               struct timespec *const end) {
+//     interval->start.tv_nsec = start->tv_nsec;
+//     interval->start.tv_sec = start->tv_sec;
+//     interval->stop.tv_nsec = end->tv_nsec;
+//     interval->stop.tv_sec = end->tv_sec;
+// }
 
 static int
 alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_rows) {
@@ -66,7 +59,6 @@ alloc_dpus(uint64_t nr_dpus) {
 void
 populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data,
               dpu_runtime_totals *runtime) {
-    struct timespec start, end;
 
     if (table_id >= AVAILABLE_RANKS) {
         fprintf(stderr, "%d ranks available but tried to load table %dth", AVAILABLE_RANKS,
@@ -74,12 +66,10 @@ populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data,
         exit(1);
     }
 
-    if (alloc_buffers(table_id, table_data, nr_rows) != 0) {
-        enomem();
-    }
+    assert(alloc_buffers(table_id, table_data, nr_rows) == 0);
+
     struct dpu_set_t dpu;
-    uint32_t len;
-    uint8_t dpu_id, rank_id;
+    uint8_t dpu_id;
 
     DPU_FOREACH(dpu_set, dpu, dpu_id) {
         if (dpu_id < (table_id + 1) * NR_COLS && dpu_id > table_id * NR_COLS) {
@@ -126,8 +116,9 @@ post_process(struct dpu_set_t dpu_rank, uint32_t rank_id, void *arg) {
 int32_t *
 lookup(uint32_t **indices, uint32_t **offsets, uint32_t *indices_len, uint32_t *nr_batches,
        float **final_results) {
-    int dpu_id, table_id;
-    struct dpu_set_t dpu_rank, dpu;
+    int dpu_id;
+    int table_id = 0;
+    struct dpu_set_t dpu;
     struct query_len lengths[NR_TABLES];
 
     DPU_FOREACH(dpu_set, dpu, dpu_id) {

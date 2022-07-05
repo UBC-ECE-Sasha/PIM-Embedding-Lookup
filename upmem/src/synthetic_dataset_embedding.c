@@ -158,7 +158,7 @@ synthetic_inference(float **final_results, uint32_t nr_embedding, uint32_t nr_ba
         }
     }
 
-    struct timespec start, end, latency;
+    struct timespec start, end;
     int sum = 0;
     for (int i = 0; i < NR_RUN; i++) {
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
@@ -166,7 +166,8 @@ synthetic_inference(float **final_results, uint32_t nr_embedding, uint32_t nr_ba
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
         sum += time_diff(start, end).tv_nsec;
     }
-    bool valid = check_embedding_set_inference(emb_tables, nr_embedding, indices, offsets,
+    __attribute__((unused)) bool valid;
+    valid = check_embedding_set_inference(emb_tables, nr_embedding, indices, offsets,
                                                indices_len, nr_batches, nr_cols, final_results);
     // printf("inference : median latency [ms]: %lf, OK ? %d \n", 1e-6 * (double) sum / NR_RUN,
     //        (int) valid);
