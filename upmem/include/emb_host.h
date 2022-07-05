@@ -200,7 +200,7 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
                 uint32_t* nr_batches, float** final_results, void *dpu_set_ptr_untyped
                 //,dpu_runtime_group *runtime_group
                 ){
-    //printf("starting lookup\n");
+    printf("starting lookup\n");
     struct dpu_set_t *dpu_set_ptr = (struct dpu_set_t *) dpu_set_ptr_untyped;
     //struct timespec start, end;
     int dpu_id,table_id;
@@ -213,14 +213,14 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     }
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_indices",0,ALIGN(
         indices_len[0]*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
-    //printf("copied indices\n");
+    printf("copied indices\n");
 
     DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
         DPU_ASSERT(dpu_prepare_xfer(dpu,offsets[(int)(dpu_id/NR_COLS)]));
     }
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_offsets",0,ALIGN(
         nr_batches[0]*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
-    //printf("copied offsets\n");
+    printf("copied offsets\n");
 
     DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
         table_id=(int)(dpu_id/NR_COLS);
