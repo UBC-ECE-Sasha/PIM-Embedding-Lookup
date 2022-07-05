@@ -12,7 +12,7 @@ build: build/emb build/embdpu
 
 build/emb: src/*.c include/*.h
 	mkdir -p build
-	gcc -O3 -g -Wall -msse4 -lm -lz -lpthread -I include -DNR_RUN=${NR_RUN} -DMAX_NR_BATCHES=${MAX_NR_BATCHES} -DINDEX_PER_BATCH=${INDEX_PER_BATCH} -DNR_ROWS=${NR_ROWS} -DNR_BATCHES=${NR_BATCHES} -DNR_EMBEDDING=${NR_EMBEDDING}  -DNR_COLS=${NR_COLS} -o build/emb src/*.c  `dpu-pkg-config --cflags --libs dpu` 
+	gcc -O0 -g -Wall -msse4 -lm -lz -lpthread -I include -DNR_RUN=${NR_RUN} -DMAX_NR_BATCHES=${MAX_NR_BATCHES} -DINDEX_PER_BATCH=${INDEX_PER_BATCH} -DNR_ROWS=${NR_ROWS} -DNR_BATCHES=${NR_BATCHES} -DNR_EMBEDDING=${NR_EMBEDDING}  -DNR_COLS=${NR_COLS} -o build/emb src/*.c  `dpu-pkg-config --cflags --libs dpu` 
 
 build/embdpu: src/dpu/*.c 
 	mkdir -p build
