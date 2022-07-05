@@ -1,18 +1,17 @@
 #include "common.h"
-#include "host/include/host.h"
 #include "emb_types.h"
+#include "host/include/host.h"
 
 #include <assert.h>
 #include <dpu.h>
 #include <dpu_log.h>
+#include <errno.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
 #include <time.h>
-
+#include <unistd.h>
 
 #define TIME_NOW(_t) (clock_gettime(CLOCK_MONOTONIC, (_t)))
 
@@ -61,16 +60,16 @@ typedef struct dpu_runtime_group {
 // copy_interval(dpu_runtime_interval *interval, struct timespec *const start,
 //               struct timespec *const end);
 
-void alloc_dpus(uint64_t nr_dpus);
+void
+alloc_dpus(uint64_t nr_dpus);
 
 void
 populate_mram(uint64_t nr_embedding, uint64_t nr_rows, uint64_t nr_cols, int32_t **table_data,
               dpu_runtime_totals *runtime);
 
-
 dpu_error_t
-post_process(struct dpu_set_t dpu_rank, uint32_t rank_id, void *arg);
+post_process(struct dpu_set_t dpu_rank, uint64_t rank_id, void *arg);
 
 int32_t *
-lookup(uint32_t **indices, uint32_t **offsets, uint32_t *indices_len, uint32_t *nr_batches,
-       float **final_results);
+lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len, uint64_t *nr_batches,
+       float **result_buffer);
