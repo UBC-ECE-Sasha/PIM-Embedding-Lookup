@@ -45,7 +45,7 @@ time_diff(struct timespec start, struct timespec end) {
 void
 synthetic_populate(uint32_t nr_rows, uint32_t nr_cols, uint32_t nr_embedding) {
     emb_tables = (int32_t **) malloc(nr_embedding * sizeof(int32_t *));
-    for (uint32_t k = 0; k < nr_embedding; k++) {
+    for (uint32_t embedding_index = 0; embedding_index < nr_embedding; embedding_index++) {
         /* allocate embedding table on host side */
         int32_t *table_data = (int32_t *) malloc(nr_rows * nr_cols * sizeof(int32_t));
 
@@ -53,14 +53,14 @@ synthetic_populate(uint32_t nr_rows, uint32_t nr_cols, uint32_t nr_embedding) {
         for (int i = 0; i < nr_rows * nr_cols; i++) {
             double data_norm = (double) (rand()) / RAND_MAX;
             table_data[i] = (int32_t) (UINT32_MAX * data_norm);
-        } 
-
-        /* store one embedding to DPU MRAM */
-        populate_mram(k, nr_rows, table_data, NULL);
+            //table_data[i] = (int32_t) i;
+        }
         /* store one embedding to HOST BUFFER */
-        emb_tables[k] = table_data;
-        // free(table_data);
+        emb_tables[embedding_index] = table_data;
     }
+    
+    /* store one embedding to DPU MRAM */
+    populate_mram(nr_embedding, nr_rows, nr_cols, emb_tables, NULL);
 }
 
 /** @brief check DPU embedding inference result for each embedding and each batch

@@ -2,6 +2,7 @@
 #include "common/include/common.h"
 #include "emb_types.h"
 
+#include <attributes.h>
 #include <mram.h>
 #include <alloc.h>
 #include <stdbool.h>
@@ -11,7 +12,7 @@
 #include <barrier.h>
 
 __mram_noinit struct query_len input_lengths;
-
+__host uint64_t emb_nr_rows;
 __mram_noinit int32_t emb_data[MEGABYTE(14)];
 __mram_noinit uint32_t input_indices[32*MAX_NR_BATCHES];
 __mram_noinit uint32_t input_offsets[MAX_NR_BATCHES];
@@ -26,6 +27,13 @@ __dma_aligned int32_t tmp_results[MAX_NR_BATCHES];
 
 int
 main() {
+    // DBG print emb_data content
+    // if (me() == 0) {
+    //     for (uint64_t i = 0; i < emb_nr_rows; i++) {
+    //         printf("emb [%lu] : %d\n", i, emb_data[i]); // get_emb_data(emb_data ,i));
+    //     }
+    // }
+    // return 0;
     if(me()==0){
         mem_reset();
         copied_indices=0;

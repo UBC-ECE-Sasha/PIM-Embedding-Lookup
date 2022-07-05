@@ -1,12 +1,11 @@
 #include "embedding.h"
+
 #include "dpu.h"
+
 #include <stdint.h>
 #include <stdlib.h>
 
 #define DPU_BINARY "./build/embdpu"
-
-/** @brief host side embedding table buffer */
-int32_t *buffer_data[NR_COLS];
 
 /** @brief global referene to dpu_set */
 struct dpu_set_t dpu_set;
@@ -19,31 +18,6 @@ struct dpu_set_t dpu_set;
 //     interval->stop.tv_nsec = end->tv_nsec;
 //     interval->stop.tv_sec = end->tv_sec;
 // }
-
-static int
-alloc_buffers(uint32_t embedding_id, int32_t *table_data, uint64_t nr_rows) {
-
-    for (int j = 0; j < NR_COLS; j++) {
-
-        size_t sz = nr_rows * sizeof(int32_t);
-        buffer_data[j] = (int32_t *) malloc(ALIGN(sz, 8));
-        if (buffer_data[j] == NULL) {
-            return ENOMEM;
-        }
-
-        for (int k = 0; k < nr_rows; k++) {
-            buffer_data[j][k] = table_data[k * NR_COLS + j];
-        }
-    }
-    return 0;
-}
-
-void
-free_buffers() {
-    for (int j = 0; j < NR_COLS; j++) {
-        free(buffer_data[j]);
-    }
-}
 
 /** @brief alloc dpu set with given number of dpus */
 void
@@ -60,29 +34,63 @@ alloc_dpus(uint64_t nr_dpus) {
  *  @param table_data stores multiple embedding parameters
  */
 void
-populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data,
+populate_mram(uint64_t nr_embedding, uint64_t nr_rows, uint64_t nr_cols, int32_t **emb_tables,
               dpu_runtime_totals *runtime) {
+    uint32_t nr_dpus;
+    DPU_ASSERT(dpu_get_nr_dpus(dpu_set, &nr_dpus));
+    assert(nr_embedding * nr_cols == nr_dpus);
 
-    if (table_id >= AVAILABLE_RANKS) {
-        fprintf(stderr, "%d ranks available but tried to load table %dth", AVAILABLE_RANKS,
-                table_id);
-        exit(1);
+    /* allocates ant creates transpose embeding matrix of parameters */
+    int32_t **buffer_data;
+    buffer_data = (int32_t **) (malloc(nr_embedding * sizeof(int32_t *)));
+    for (uint64_t embedding_index = 0; embedding_index < nr_embedding; embedding_index++) {
+        buffer_data[embedding_index] = (int32_t *) (malloc(nr_rows * nr_cols * sizeof(int32_t)));
+
+        for (uint64_t row_index = 0; row_index < nr_rows; row_index++)
+            for (uint64_t col_index = 0; col_index < nr_cols; col_index++) {
+                buffer_data[embedding_index][col_index * nr_rows + row_index] =
+                    emb_tables[embedding_index][row_index * nr_cols + col_index];
+            }
     }
-
-    assert(alloc_buffers(table_id, table_data, nr_rows) == 0);
+    // for (uint64_t embedding_index = 0; embedding_index < nr_embedding; embedding_index++) {
+    //     for (uint64_t i = 0; i < nr_rows * nr_cols; i++)
+    //         printf("emb %d\n", buffer_data[embedding_index][i]);
+    // }
 
     struct dpu_set_t dpu;
-    uint8_t dpu_id;
+    uint64_t dpu_index = 0;
+    uint64_t embedding_index = 0;
+    uint64_t cur_emb_cols = 0;
+    DPU_FOREACH(dpu_set, dpu, dpu_index) {
+        /* set start addr of each transposed column */
+        uint64_t col_start_addr = dpu_index * nr_rows;
+        DPU_ASSERT(dpu_prepare_xfer(dpu, &(buffer_data[embedding_index][col_start_addr])));
 
-    DPU_FOREACH(dpu_set, dpu, dpu_id) {
-        if (dpu_id < (table_id + 1) * NR_COLS && dpu_id > table_id * NR_COLS) {
-            DPU_ASSERT(dpu_prepare_xfer(dpu, buffer_data[dpu_id - (table_id * NR_COLS)]));
+        cur_emb_cols++;
+        if (cur_emb_cols == nr_cols) {
+            embedding_index++;
+            cur_emb_cols = 0;
         }
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, "emb_data", 0,
                              ALIGN(nr_rows * sizeof(int32_t), 8), DPU_XFER_DEFAULT));
 
-    free_buffers();
+    DPU_ASSERT(
+        dpu_broadcast_to(dpu_set, "emb_nr_rows", 0, &nr_rows, sizeof(uint64_t), DPU_XFER_DEFAULT));
+    /* free transposed matrix of parameters */
+    for (uint64_t embedding_index = 0; embedding_index < nr_embedding; embedding_index++)
+        free(buffer_data[embedding_index]);
+    free(buffer_data);
+
+    // DPU_ASSERT(dpu_launch(dpu_set, DPU_SYNCHRONOUS));
+    // dpu_sync(dpu_set);
+    // {
+    //     struct dpu_set_t dpu;
+    //     DPU_FOREACH(dpu_set, dpu) {
+    //         DPU_ASSERT(dpu_log_read(dpu, stdout));
+    //     }
+    //     fflush(stdout);
+    // }
 }
 
 /** @brief host side post processing of DPU side embedding results
@@ -173,8 +181,8 @@ lookup(uint32_t **indices, uint32_t **offsets, uint32_t *indices_len, uint32_t *
             TIME_NOW(&end);
             fprintf(stderr,
                 "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
-                dpu_index, runtime_group[embedding_id].in_use, embedding_id, runtime_group[embedding_id].length);
-            exit(1);
+                dpu_index, runtime_group[embedding_id].in_use, embedding_id,
+    runtime_group[embedding_id].length); exit(1);
         }
         copy_interval(
             &runtime_group->intervals[runtime_group[embedding_id].in_use], &start, &end);

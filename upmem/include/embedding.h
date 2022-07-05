@@ -64,7 +64,7 @@ typedef struct dpu_runtime_group {
 void alloc_dpus(uint64_t nr_dpus);
 
 void
-populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data,
+populate_mram(uint64_t nr_embedding, uint64_t nr_rows, uint64_t nr_cols, int32_t **table_data,
               dpu_runtime_totals *runtime);
 
 
