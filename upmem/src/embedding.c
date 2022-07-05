@@ -128,7 +128,7 @@ int32_t *
 lookup(uint32_t **indices, uint32_t **offsets, uint32_t *indices_len, uint32_t *nr_batches,
        float **final_results) {
     int dpu_index;
-    int embedding_id = 0;
+    int embedding_id;
     struct dpu_set_t dpu;
     struct query_len lengths[NR_EMBEDDING];
 
@@ -173,8 +173,22 @@ lookup(uint32_t **indices, uint32_t **offsets, uint32_t *indices_len, uint32_t *
     callback_data.nr_batches = nr_batches;
     callback_data.tmp_results = tmp_results;
 
-    DPU_ASSERT(dpu_callback(dpu_set, post_process, (void *) &callback_data, DPU_CALLBACK_ASYNC));
+    // DPU_ASSERT(dpu_callback(dpu_set, post_process, (void *) &callback_data, DPU_CALLBACK_ASYNC));
     DPU_ASSERT(dpu_sync(dpu_set));
+
+    for (uint64_t embedding_index = 0; embedding_index < NR_EMBEDDING; embedding_index++) {
+        for (uint64_t row_index = 0; row_index < NR_ROWS; row_index++)
+            for (uint64_t col_index = 0; col_index < NR_COLS; col_index++) {
+                final_results[embedding_index][row_index * NR_COLS + col_index] =
+                    (float) callback_data.tmp_results[embedding_index][col_index][row_index] * pow(10, -9);
+            }
+    }
+
+    // read dpu logs
+    DPU_FOREACH(dpu_set,dpu, dpu_index){
+        // if(dpu_index==0)
+            DPU_ASSERT(dpu_log_read(dpu,stdout));
+    }
 
     /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {
         if(runtime_group[embedding_id].in_use >= runtime_group[embedding_id].length) {
