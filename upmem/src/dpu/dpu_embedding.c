@@ -20,7 +20,7 @@ __mram_noinit int32_t results[MAX_NR_BATCHES];
 
 BARRIER_INIT(my_barrier, NR_TASKLETS);
 
-uint32_t indices_len, nr_batches, copied_indices;
+uint32_t indices_len, nr_batches;
 __dma_aligned struct query_len lengths;
 __dma_aligned uint32_t indices[32*MAX_NR_BATCHES], offsets[MAX_NR_BATCHES];
 __dma_aligned int32_t tmp_results[MAX_NR_BATCHES];
@@ -35,15 +35,17 @@ main() {
     // }
     // return 0;
     if(me()==0){
-        mem_reset();
-        copied_indices=0;
-
         mram_read(&input_lengths, &lengths, ALIGN(sizeof(struct query_len),8));
         indices_len=lengths.indices_len;
         nr_batches=lengths.nr_batches;
 
         mram_read(input_indices,indices,ALIGN(indices_len*sizeof(uint32_t),8));
         mram_read(input_offsets,offsets,ALIGN(nr_batches*sizeof(uint32_t),8));
+
+        // for(uint32_t i=offsets[0]; i<offsets[0]+10; i++){
+        for(uint32_t i=0; i<10; i++){
+            printf("emb_data: %d\n",emb_data[i]);
+        }
     }
     barrier_wait(&my_barrier);
 
