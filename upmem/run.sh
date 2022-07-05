@@ -32,14 +32,14 @@ dataset_valid() {
 }
 
 kaggle_env() {
-    export NR_TABLES=26
+    export NR_EMBEDDING=26
     export NR_COLS=16
     export MAX_NR_BATCHES=512
     export NR_TASKLETS=14
 }
 
 random_env() {
-    export NR_TABLES=9
+    export NR_EMBEDDING=9
     export NR_COLS=64
     export MAX_NR_BATCHES=64
     export NR_TASKLETS=14
@@ -47,13 +47,13 @@ random_env() {
 
 # Old - pre-loadgenerator
 # toy_env() {
-#     export NR_TABLES=1
+#     export NR_EMBEDDING=1
 #     export NR_COLS=8
 #     export DPU_TEST=1
 #     export NR_TASKLETS=1
 # }
 toy_env() {
-    export NR_TABLES=9
+    export NR_EMBEDDING=9
     export NR_COLS=64
     export NR_BATCHES=64
     export DPU_TEST=1

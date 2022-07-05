@@ -93,7 +93,7 @@ post_process(struct dpu_set_t dpu_rank, uint32_t rank_id, void *arg) {
     float **final_results = input->final_results;
     uint32_t *nr_batches = input->nr_batches;
     dpu_error_t status = DPU_OK;
-    if (rank_id < NR_TABLES) {
+    if (rank_id < NR_EMBEDDING) {
         for (int j = 0; j < NR_COLS; j++) {
             for (int k = 0; k < nr_batches[rank_id]; k++)
                 final_results[rank_id][k * NR_COLS + j] =
@@ -119,7 +119,7 @@ lookup(uint32_t **indices, uint32_t **offsets, uint32_t *indices_len, uint32_t *
     int dpu_id;
     int table_id = 0;
     struct dpu_set_t dpu;
-    struct query_len lengths[NR_TABLES];
+    struct query_len lengths[NR_EMBEDDING];
 
     DPU_FOREACH(dpu_set, dpu, dpu_id) {
         DPU_ASSERT(dpu_prepare_xfer(dpu, indices[(int) (dpu_id / NR_COLS)]));
@@ -144,7 +144,7 @@ lookup(uint32_t **indices, uint32_t **offsets, uint32_t *indices_len, uint32_t *
 
     DPU_ASSERT(dpu_launch(dpu_set, DPU_ASYNCHRONOUS));
 
-    int32_t ***tmp_results = (int32_t ***) malloc(NR_TABLES * sizeof(int32_t **));
+    int32_t ***tmp_results = (int32_t ***) malloc(NR_EMBEDDING * sizeof(int32_t **));
     DPU_FOREACH(dpu_set, dpu, dpu_id) {
         if (dpu_id % NR_COLS == 0) {
             table_id = dpu_id / NR_COLS;

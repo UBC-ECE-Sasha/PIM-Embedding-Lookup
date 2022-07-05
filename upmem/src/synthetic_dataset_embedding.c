@@ -191,7 +191,7 @@ main() {
         }
     }
 
-    NR_DPUS = NR_COLS * NR_TABLES;
+    NR_DPUS = NR_COLS * NR_EMBEDDING;
     
 	printf("alloc dpus %lu \n", NR_DPUS);
 	alloc_dpus(NR_DPUS);

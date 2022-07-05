@@ -49,7 +49,7 @@ CFLAGS              += $(COMMON_CFLAGS) \
                        -DNR_DPUS=$(NR_DPUS) \
                        -DNR_TASKLETS=$(NR_TASKLETS) \
                        -DCOUNTER_CONFIG=$(COUNTER_CONFIG) \
-                       -DNR_TABLES=$(NR_TABLES) \
+                       -DNR_EMBEDDING=$(NR_EMBEDDING) \
                        -DNR_COLS=$(NR_COLS) \
                        -DMAX_NR_BATCHES=$(MAX_NR_BATCHES)
 
