@@ -177,10 +177,10 @@ lookup(uint32_t **indices, uint32_t **offsets, uint32_t *indices_len, uint32_t *
     DPU_ASSERT(dpu_sync(dpu_set));
 
     for (uint64_t embedding_index = 0; embedding_index < NR_EMBEDDING; embedding_index++) {
-        for (uint64_t row_index = 0; row_index < NR_ROWS; row_index++)
+        for (uint64_t batch_index = 0; batch_index < *nr_batches; batch_index++)
             for (uint64_t col_index = 0; col_index < NR_COLS; col_index++) {
-                final_results[embedding_index][row_index * NR_COLS + col_index] =
-                    (float) callback_data.tmp_results[embedding_index][col_index][row_index] * pow(10, -9);
+                final_results[embedding_index][batch_index * NR_COLS + col_index] =
+                    (float) callback_data.tmp_results[embedding_index][col_index][batch_index] * pow(10, -9);
             }
     }
 
