@@ -24,4 +24,7 @@ clean:
 testdpu: FORCE
 	./build/emb
 
+tracedpu: FORCE
+	dpu-profiling functions -o dpu.json -a -A -f synthetic_inference  -- ./build/emb
+
 FORCE: ;
