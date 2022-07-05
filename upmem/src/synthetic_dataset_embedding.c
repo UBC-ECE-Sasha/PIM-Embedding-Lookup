@@ -90,25 +90,21 @@ check_embedding_set_inference(int32_t **emb_tables, uint32_t nr_embedding, uint3
 
     /* for each embedding */
     for (int embedding_index = 0; embedding_index < nr_embedding; embedding_index++) {
-        int ind_ptr = 0;
         /* for each input batch of index */
         for (int batch_index = 0; batch_index < nr_batches; batch_index++) {
             /* reset tmb buffer */
             for (int col_index = 0; col_index < nr_cols; col_index++)
                 tmp_result[col_index] = 0;
             /* check limits */
-            while ((ind_ptr < offsets[embedding_index][batch_index + 1] &&
-                    batch_index < nr_batches - 1) ||
-                   (batch_index == nr_batches - 1 && ind_ptr < indices_len[embedding_index])) {
-
+            uint32_t upper_bound = batch_index == nr_batches - 1 ? indices_len[embedding_index]
+                                                                 : offsets[embedding_index][batch_index + 1];
+            for(uint32_t ind_ptr = offsets[embedding_index][batch_index]; ind_ptr < upper_bound; ind_ptr++) {
                 /* solve ind_ptr */
                 index = indices[embedding_index][ind_ptr];
                 for (int col_index = 0; col_index < nr_cols; col_index++)
                     /*Embedding reduction mode : ADD */
                     tmp_result[col_index] +=
                         emb_tables[embedding_index][index * nr_cols + col_index];
-                /* next indice */
-                ind_ptr++;
             }
             /* ckeck the batch result */
             for (int col_index = 0; col_index < nr_cols; col_index++) {
