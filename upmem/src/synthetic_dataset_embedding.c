@@ -38,10 +38,10 @@ time_diff(struct timespec start, struct timespec end) {
 }
 
 /** @brief computes synthetic embedding tables and store it to DPU MRAM
-    @param nr_rows Embedding Number of rows (same for each embedding)
-    @param nr_cols Embedding Number of columns (same for each embedding)
-    @param nr_embedding number of embedding in emb_tables
-*/
+ *  @param nr_rows Embedding Number of rows (same for each embedding)
+ *  @param nr_cols Embedding Number of columns (same for each embedding)
+ *  @param nr_embedding number of embedding in emb_tables
+ */
 void
 synthetic_populate(uint32_t nr_rows, uint32_t nr_cols, uint32_t nr_embedding) {
     emb_tables = (int32_t **) malloc(nr_embedding * sizeof(int32_t *));
@@ -64,17 +64,17 @@ synthetic_populate(uint32_t nr_rows, uint32_t nr_cols, uint32_t nr_embedding) {
 }
 
 /** @brief check DPU embedding inference result for each embedding and each batch
-    @param emb_tables host side embeding tables
-    @param nr_embedding number of embedding in emb_tables
-    @param indices array that stores indices [EMB_INDEX][BATCH_INDEX][INDEXES]
-    @param offsets array that stores indices offset (pytorch EmbedingBag convention)
-   [EMB_INDEX][BATCH_INDEX][OFFSET]
-    @param indices_len  gives the lenght of the input indices vector for each embedding [EMB_INDEX]
-    @param nr_batches gives the number of batch (same for each embedding) in indices
-    @param nr_cols Embedding Number of columns (same for each embedding)
-    @param results DPU embedding inference result buffer [EMB_INDEX][BATCH_INDEX * NR_COLS]
-    @return host model result and DPU results are the same or not
-*/
+ *  @param emb_tables host side embeding tables
+ *  @param nr_embedding number of embedding in emb_tables
+ *  @param indices array that stores indices [EMB_INDEX][BATCH_INDEX][INDEXES]
+ *  @param offsets array that stores indices offset (pytorch EmbedingBag convention)
+ *  [EMB_INDEX][BATCH_INDEX][OFFSET]
+ *  @param indices_len  gives the lenght of the input indices vector for each embedding [EMB_INDEX]
+ *  @param nr_batches gives the number of batch (same for each embedding) in indices
+ *  @param nr_cols Embedding Number of columns (same for each embedding)
+ *  @param results DPU embedding inference result buffer [EMB_INDEX][BATCH_INDEX * NR_COLS]
+ *  @return host model result and DPU results are the same or not
+ */
 bool
 check_embedding_set_inference(int32_t **emb_tables, uint32_t nr_embedding, uint32_t **indices,
                               uint32_t **offsets, uint32_t *indices_len, uint32_t nr_batches,
@@ -124,14 +124,14 @@ check_embedding_set_inference(int32_t **emb_tables, uint32_t nr_embedding, uint3
 }
 
 /** @brief perform DPU embedding table inference given input indices with multiple embedding and
-   multiple batch
-    @param final_results embedding lookup operation DPU results
-    @param nr_embedding number of embedding in emb_tables
-    @param nr_batches gives the number of batch (same for each embedding) in indices
-    @param indices_pet_batch numbr of indices per batch
-    @param nr_rows Embedding Number of rows (same for each embedding)
-    @param nr_cols Embedding Number of columns (same for each embedding)
-*/
+ * multiple batch
+ *  @param final_results embedding lookup operation DPU results
+ *  @param nr_embedding number of embedding in emb_tables
+ *  @param nr_batches gives the number of batch (same for each embedding) in indices
+ *  @param indices_pet_batch numbr of indices per batch
+ *  @param nr_rows Embedding Number of rows (same for each embedding)
+ *  @param nr_cols Embedding Number of columns (same for each embedding)
+ */
 void
 synthetic_inference(float **final_results, uint32_t nr_embedding, uint32_t nr_batches,
                     uint32_t indices_per_batch, uint32_t nr_rows, uint32_t nr_cols) {

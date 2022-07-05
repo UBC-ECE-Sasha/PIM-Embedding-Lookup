@@ -1,4 +1,7 @@
 #include "embedding.h"
+#include "dpu.h"
+#include <stdint.h>
+#include <stdlib.h>
 
 #define DPU_BINARY "./build/embdpu"
 
@@ -18,7 +21,7 @@ struct dpu_set_t dpu_set;
 // }
 
 static int
-alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_rows) {
+alloc_buffers(uint32_t embedding_id, int32_t *table_data, uint64_t nr_rows) {
 
     for (int j = 0; j < NR_COLS; j++) {
 
@@ -51,11 +54,11 @@ alloc_dpus(uint64_t nr_dpus) {
 }
 
 /** @brief transfer one embedding table params to DPU DRAM
-    @param populate_mram(uint32_t
-    @param table_id index of the embedding table to transfer
-    @param nr_rows embedding number of rows (common to all embedding)
-    @param table_data stores multiple embedding parameters
-*/
+ *  @param populate_mram(uint32_t
+ *  @param embedding_id index of the embedding table to transfer
+ *  @param nr_rows embedding number of rows (common to all embedding)
+ *  @param table_data stores multiple embedding parameters
+ */
 void
 populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data,
               dpu_runtime_totals *runtime) {
@@ -83,10 +86,10 @@ populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data,
 }
 
 /** @brief host side post processing of DPU side embedding results
-    @param dpu_rank pointer to rank dpu set
-    @param rank_id index of the rank
-    @param args rank callback generic args
-*/
+ *  @param dpu_rank pointer to rank dpu set
+ *  @param rank_id index of the rank
+ *  @param args rank callback generic args
+ */
 dpu_error_t
 post_process(struct dpu_set_t dpu_rank, uint32_t rank_id, void *arg) {
     struct callback_input *input = (struct callback_input *) arg;
@@ -104,40 +107,40 @@ post_process(struct dpu_set_t dpu_rank, uint32_t rank_id, void *arg) {
 }
 
 /** @brief perform DPU lookup operation in embedding set and for input indices of
-        multiple batch
-    @param indices array that stores indices [EMB_INDEX][BATCH_INDEX][INDEXES]
-    @param offsets array that stores indices offset (pytorch EmbedingBag convention)
-   [EMB_INDEX][BATCH_INDEX][OFFSET]
-    @param indices_len  gives the lenght of the input indices vector for each embedding [EMB_INDEX]
-    @param nr_batches gives the number of batch (same for each embedding) in indices
-    @param final_results embedding lookup operation DPU results
-    @return TBC
-*/
+ *        multiple batch
+ *  @param indices array that stores indices [EMB_INDEX][BATCH_INDEX][INDEXES]
+ *  @param offsets array that stores indices offset (pytorch EmbedingBag convention)
+ *  [EMB_INDEX][BATCH_INDEX][OFFSET]
+ *  @param indices_len  gives the lenght of the input indices vector for each embedding [EMB_INDEX]
+ *  @param nr_batches gives the number of batch (same for each embedding) in indices
+ *  @param final_results embedding lookup operation DPU results
+ *  @return TBC
+ */
 int32_t *
 lookup(uint32_t **indices, uint32_t **offsets, uint32_t *indices_len, uint32_t *nr_batches,
        float **final_results) {
-    int dpu_id;
-    int table_id = 0;
+    int dpu_index;
+    int embedding_id = 0;
     struct dpu_set_t dpu;
     struct query_len lengths[NR_EMBEDDING];
 
-    DPU_FOREACH(dpu_set, dpu, dpu_id) {
-        DPU_ASSERT(dpu_prepare_xfer(dpu, indices[(int) (dpu_id / NR_COLS)]));
+    DPU_FOREACH(dpu_set, dpu, dpu_index) {
+        DPU_ASSERT(dpu_prepare_xfer(dpu, indices[(int) (dpu_index / NR_COLS)]));
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, "input_indices", 0,
                              ALIGN(indices_len[0] * sizeof(uint32_t), 8), DPU_XFER_DEFAULT));
 
-    DPU_FOREACH(dpu_set, dpu, dpu_id) {
-        DPU_ASSERT(dpu_prepare_xfer(dpu, offsets[(int) (dpu_id / NR_COLS)]));
+    DPU_FOREACH(dpu_set, dpu, dpu_index) {
+        DPU_ASSERT(dpu_prepare_xfer(dpu, offsets[(int) (dpu_index / NR_COLS)]));
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, "input_offsets", 0,
                              ALIGN(nr_batches[0] * sizeof(uint32_t), 8), DPU_XFER_DEFAULT));
 
-    DPU_FOREACH(dpu_set, dpu, dpu_id) {
-        table_id = (int) (dpu_id / NR_COLS);
-        lengths[table_id].indices_len = *indices_len;
-        lengths[table_id].nr_batches = *nr_batches;
-        DPU_ASSERT(dpu_prepare_xfer(dpu, &lengths[table_id]));
+    DPU_FOREACH(dpu_set, dpu, dpu_index) {
+        embedding_id = (int) (dpu_index / NR_COLS);
+        lengths[embedding_id].indices_len = *indices_len;
+        lengths[embedding_id].nr_batches = *nr_batches;
+        DPU_ASSERT(dpu_prepare_xfer(dpu, &lengths[embedding_id]));
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, "input_lengths", 0, sizeof(struct query_len),
                              DPU_XFER_DEFAULT));
@@ -145,14 +148,14 @@ lookup(uint32_t **indices, uint32_t **offsets, uint32_t *indices_len, uint32_t *
     DPU_ASSERT(dpu_launch(dpu_set, DPU_ASYNCHRONOUS));
 
     int32_t ***tmp_results = (int32_t ***) malloc(NR_EMBEDDING * sizeof(int32_t **));
-    DPU_FOREACH(dpu_set, dpu, dpu_id) {
-        if (dpu_id % NR_COLS == 0) {
-            table_id = dpu_id / NR_COLS;
-            tmp_results[table_id] = (int32_t **) malloc(NR_COLS * sizeof(int32_t *));
+    DPU_FOREACH(dpu_set, dpu, dpu_index) {
+        if (dpu_index % NR_COLS == 0) {
+            embedding_id = dpu_index / NR_COLS;
+            tmp_results[embedding_id] = (int32_t **) malloc(NR_COLS * sizeof(int32_t *));
         }
-        tmp_results[table_id][dpu_id % NR_COLS] =
+        tmp_results[embedding_id][dpu_index % NR_COLS] =
             (int32_t *) malloc(nr_batches[0] * sizeof(int32_t));
-        DPU_ASSERT(dpu_prepare_xfer(dpu, &tmp_results[table_id][dpu_id % NR_COLS][0]));
+        DPU_ASSERT(dpu_prepare_xfer(dpu, &tmp_results[embedding_id][dpu_index % NR_COLS][0]));
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_FROM_DPU, "results", 0,
                              ALIGN(sizeof(int32_t) * nr_batches[0], 8), DPU_XFER_DEFAULT));
@@ -166,16 +169,16 @@ lookup(uint32_t **indices, uint32_t **offsets, uint32_t *indices_len, uint32_t *
     DPU_ASSERT(dpu_sync(dpu_set));
 
     /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {
-        if(runtime_group[table_id].in_use >= runtime_group[table_id].length) {
+        if(runtime_group[embedding_id].in_use >= runtime_group[embedding_id].length) {
             TIME_NOW(&end);
             fprintf(stderr,
                 "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
-                dpu_id, runtime_group[table_id].in_use, table_id, runtime_group[table_id].length);
+                dpu_index, runtime_group[embedding_id].in_use, embedding_id, runtime_group[embedding_id].length);
             exit(1);
         }
         copy_interval(
-            &runtime_group->intervals[runtime_group[table_id].in_use], &start, &end);
-            runtime_group[table_id].in_use++;
+            &runtime_group->intervals[runtime_group[embedding_id].in_use], &start, &end);
+            runtime_group[embedding_id].in_use++;
     } */
     return 0;
 }

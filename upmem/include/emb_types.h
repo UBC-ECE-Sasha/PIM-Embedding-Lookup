@@ -9,7 +9,7 @@
 
 struct buffer_meta {
     uint32_t col_id;
-    uint32_t table_id;
+    uint32_t embedding_index;
 } __attribute__((packed));
 
 struct embedding_table {
