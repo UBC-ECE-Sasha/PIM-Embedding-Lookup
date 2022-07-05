@@ -49,20 +49,14 @@ main() {
     }
     barrier_wait(&my_barrier);
 
-    uint32_t indices_ptr = me()==0?0:offsets[me()];
-
     for (uint64_t i=me(); i< nr_batches; i+=NR_TASKLETS){
-
         tmp_results[i]=0;
-        while ( (i==nr_batches-1 && indices_ptr<indices_len) || 
-        (i<nr_batches-1 && indices_ptr<offsets[i+1]) )
+        uint32_t upper_bound = i==nr_batches-1 ? indices_len : offsets[i+1];
+        for(uint32_t indices_ptr=offsets[i]; indices_ptr<upper_bound; indices_ptr++)
         {
             uint32_t ind = indices[indices_ptr];
             tmp_results[i]+=emb_data[ind];
-            indices_ptr++;
         }
-        
-        indices_ptr=offsets[i+NR_TASKLETS];
     }
 
     barrier_wait(&my_barrier);
