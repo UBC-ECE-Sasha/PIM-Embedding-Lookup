@@ -10,15 +10,6 @@
 
 static uint64_t NR_DPUS;
 
-/** @brief global referene to dpu_set */
-// struct dpu_set_t dpu_set;
-
-/** @brief host side embedding table buffer */
-static int32_t **emb_tables;
-
-/** @brief number of inference to perform for a parameter set n times inference with given
- * parameters */
-
 /* @brief final_results embedding lookup operationDPU results */
 static float **final_results;
 
