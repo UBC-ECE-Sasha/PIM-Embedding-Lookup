@@ -174,6 +174,18 @@ lookup(uint32_t **indices, uint32_t **offsets, struct input_info *input_info, ui
     callback_data.dpu_results_buffer = dpu_result_buffer;
 
     DPU_ASSERT(dpu_sync(dpu_set));
+
+    uint32_t counter_init, counter_main, counter_all;
+    DPU_FOREACH(dpu_set, dpu, dpu_index) {
+        DPU_ASSERT(
+            dpu_copy_from(dpu, "counter_init", 0, &counter_init, sizeof(uint32_t)));
+        DPU_ASSERT(
+            dpu_copy_from(dpu, "counter_main", 0, &counter_main, sizeof(uint32_t)));
+        DPU_ASSERT(
+            dpu_copy_from(dpu, "counter_all", 0, &counter_all, sizeof(uint32_t)));
+    }
+    printf("DPU cycles: init %d main %d all %d\n", counter_init, counter_main, counter_all);
+
     for (uint64_t embedding_index = 0; embedding_index < nr_embedding; embedding_index++) {
         for (uint64_t batch_index = 0;
              batch_index < input_info->nr_batches_per_embedding[embedding_index]; batch_index++)
