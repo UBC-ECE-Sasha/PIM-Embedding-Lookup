@@ -47,21 +47,27 @@ main() {
     }
     barrier_wait(&my_barrier);
 
-    for (uint32_t i = me(); i < nr_batches; i += NR_TASKLETS) {
-        tmp_results[i] = 0;
-        uint32_t upper_bound = i == nr_batches - 1 ? indices_len : offsets[i + 1];
-        for (uint32_t indices_ptr = offsets[i]; indices_ptr < upper_bound; indices_ptr++) {
-            uint32_t ind = indices[indices_ptr];
-            tmp_results[i] += emb_data[ind];
+    uint32_t batch_lot_size = 2048 / sizeof(*results);
+    uint32_t nr_batch_lots = (nr_batches / batch_lot_size) + 1;
+    uint32_t batch_end = 0;
+    for (uint32_t batch_lot=0; batch_lot < nr_batch_lots; batch_lot++) {
+        uint32_t batch_start = batch_end;
+        batch_end = MIN(batch_start + batch_lot_size, nr_batches);
+        for (uint32_t i = me() + batch_start; i < batch_end; i += NR_TASKLETS) {
+            tmp_results[i] = 0;
+            uint32_t upper_bound = i == nr_batches - 1 ? indices_len : offsets[i + 1];
+            for (uint32_t indices_ptr = offsets[i]; indices_ptr < upper_bound; indices_ptr++) {
+                uint32_t ind = indices[indices_ptr];
+                tmp_results[i] += emb_data[ind];
+            }
         }
+        barrier_wait(&my_barrier);
+        if (me() == 0)
+            mram_write(tmp_results, &results[batch_start], ALIGN(batch_end - batch_start * sizeof(int32_t), 8));
+        barrier_wait(&my_barrier);
     }
 
-    barrier_wait(&my_barrier);
     if (me() == 0) {
-        counter_main = perfcounter_get() - counter_init;
-
-        mram_write(tmp_results, results, ALIGN(nr_batches * sizeof(int32_t), 8));
-
         counter_all = perfcounter_get();
     }
 
