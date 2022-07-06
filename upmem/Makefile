@@ -15,12 +15,12 @@ build: build/emb build/embdpu
 
 build/emb: src/*.c include/*.h
 	mkdir -p build
-	gcc -O0 -g -Wall -msse4 -lm -lz -lpthread -I include -DNR_RUN=${NR_RUN} -DNR_TASKLETS=${NR_TASKLETS} -DMAX_INDEX_PER_BATCH=${MAX_INDEX_PER_BATCH}  -DINDEX_PER_BATCH=${INDEX_PER_BATCH} -DMAX_NR_BATCHES=${MAX_NR_BATCHES} -DINDEX_PER_BATCH=${INDEX_PER_BATCH} -DNR_ROWS=${NR_ROWS} -DNR_BATCHES=${NR_BATCHES} -DNR_EMBEDDING=${NR_EMBEDDING}  -DNR_COLS=${NR_COLS} -o build/emb src/*.c  `dpu-pkg-config --cflags --libs dpu` 
+	gcc -O0 -g -Wall -msse4 -lm -lz -lpthread -I include -DNR_RUN=${NR_RUN} -DNR_TASKLETS=${NR_TASKLETS} -DMAX_INDEX_PER_BATCH=${MAX_INDEX_PER_BATCH} -DMAX_NR_BATCHES=${MAX_NR_BATCHES} -DINDEX_PER_BATCH=${INDEX_PER_BATCH} -DNR_ROWS=${NR_ROWS} -DNR_BATCHES=${NR_BATCHES} -DNR_EMBEDDING=${NR_EMBEDDING}  -DNR_COLS=${NR_COLS} -o build/emb src/*.c  `dpu-pkg-config --cflags --libs dpu` 
 
 build/embdpu: src/dpu/*.c 
 	mkdir -p build
 	# TODO : why flto fails
-	dpu-clang -g0 -O3 -flto=thin  -I include -DNR_RUN=${NR_RUN} -DNR_TASKLETS=${NR_TASKLETS} -DMAX_INDEX_PER_BATCH=${MAX_INDEX_PER_BATCH}  -DINDEX_PER_BATCH=${INDEX_PER_BATCH} -DMAX_NR_BATCHES=${MAX_NR_BATCHES}  -DNR_EMBEDDING=${NR_EMBEDDING} -DINDEX_PER_BATCH=${INDEX_PER_BATCH} -DNR_ROWS=${NR_ROWS}   -DNR_BATCHES=${NR_BATCHES} -o build/embdpu src/dpu/dpu_embedding.c
+	dpu-clang -g0 -O3 -flto=thin  -I include -DNR_RUN=${NR_RUN} -DNR_TASKLETS=${NR_TASKLETS} -DMAX_INDEX_PER_BATCH=${MAX_INDEX_PER_BATCH}  -DMAX_NR_BATCHES=${MAX_NR_BATCHES}  -DNR_EMBEDDING=${NR_EMBEDDING} -DINDEX_PER_BATCH=${INDEX_PER_BATCH} -DNR_ROWS=${NR_ROWS}   -DNR_BATCHES=${NR_BATCHES} -o build/embdpu src/dpu/dpu_embedding.c
 
 clean:
 	([ -d "build" ] && rm -r build/ && rm -f out.cpu.log out.dpu.log) || [ ! -d "build" ]
