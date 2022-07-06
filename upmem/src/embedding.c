@@ -131,12 +131,14 @@ lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len,
     struct dpu_set_t dpu;
     struct query_len lengths[NR_EMBEDDING];
 
+    // TODO: loop over embeddings
     DPU_FOREACH(dpu_set, dpu, dpu_index) {
         DPU_ASSERT(dpu_prepare_xfer(dpu, indices[(int) (dpu_index / NR_COLS)]));
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, "input_indices", 0,
                              ALIGN(indices_len[0] * sizeof(uint32_t), 8), DPU_XFER_DEFAULT));
 
+    // TODO: loop over embeddings
     DPU_FOREACH(dpu_set, dpu, dpu_index) {
         DPU_ASSERT(dpu_prepare_xfer(dpu, offsets[(int) (dpu_index / NR_COLS)]));
     }
@@ -160,8 +162,8 @@ lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len,
 
     int32_t ***tmp_results = (int32_t ***) malloc(NR_EMBEDDING * sizeof(int32_t **));
     DPU_FOREACH(dpu_set, dpu, dpu_index) {
-        if (dpu_index % NR_COLS == 0) {
             embedding_id = dpu_index / NR_COLS;
+        if (dpu_index % NR_COLS == 0) {
             tmp_results[embedding_id] = (int32_t **) malloc(NR_COLS * sizeof(int32_t *));
         }
         assert(nr_batches_per_embedding[embedding_id] == nr_batches_per_embedding[0]);
@@ -182,7 +184,7 @@ lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len,
     DPU_ASSERT(dpu_sync(dpu_set));
 
     for (uint64_t embedding_index = 0; embedding_index < NR_EMBEDDING; embedding_index++) {
-        for (uint64_t batch_index = 0; batch_index < *nr_batches_per_embedding; batch_index++)
+        for (uint64_t batch_index = 0; batch_index < nr_batches_per_embedding[embedding_index]; batch_index++)
             for (uint64_t col_index = 0; col_index < NR_COLS; col_index++) {
                 result_buffer[embedding_index][batch_index * NR_COLS + col_index] =
                     (float) callback_data.tmp_results[embedding_index][col_index][batch_index] *
@@ -191,10 +193,10 @@ lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len,
     }
 
     // read dpu logs
-    DPU_FOREACH(dpu_set, dpu, dpu_index) {
-        // if(dpu_index==0)
-        DPU_ASSERT(dpu_log_read(dpu, stdout));
-    }
+    // DPU_FOREACH(dpu_set, dpu, dpu_index) {
+    //     // if(dpu_index==0)
+    //     DPU_ASSERT(dpu_log_read(dpu, stdout));
+    // }
 
     /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {
         if(runtime_group[embedding_id].in_use >= runtime_group[embedding_id].length) {

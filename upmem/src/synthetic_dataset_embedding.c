@@ -57,7 +57,6 @@ synthetic_populate(int32_t **emb_tables, uint64_t nr_rows, uint64_t nr_cols,
         for (int i = 0; i < nr_rows * nr_cols; i++) {
             double data_norm = (double) (rand()) / RAND_MAX / INDEX_PER_BATCH;
             emb_tables[embedding_index][i] = (int32_t) (INT32_MAX * data_norm);
-            // table_data[i] = (int32_t) i;
         }
     }
 
@@ -113,10 +112,8 @@ check_embedding_set_inference(int32_t **emb_tables, uint64_t nr_embedding, uint3
 
                 float dpu_result = results[embedding_index][batch_index * nr_cols + col_index];
                 float host_result = tmp_result[col_index];
-                // printf("%f %f \n", dpu_result* pow(10, 9)  , host_result);
-                // printf("%f %f \n", dpu_result* pow(10, 9)  , host_result);
-                float diff = fabs(dpu_result * pow(10, 9) - host_result);
-                printf("[%d][%d][%d]diff %f\n", embedding_index, batch_index, col_index, diff);
+                // float diff = fabs(dpu_result * pow(10, 9) - host_result);
+                // printf("[%d][%d][%d]diff: %f\tdpu_result: %f\thost_result: %f\n", embedding_index, batch_index, col_index , diff, dpu_result * pow(10,9), host_result);
                 /* check magnitude with arbitrary threshold */
                 if (fabs(dpu_result * pow(10, 9) - host_result) > 1000)
                     valid = false;
@@ -177,8 +174,8 @@ synthetic_inference(int32_t **emb_tables, float **result_buffer, uint64_t nr_emb
     valid = check_embedding_set_inference(emb_tables, nr_embedding, indices, offsets, indices_len,
                                           nr_batches, nr_cols, result_buffer);
 
-    // printf("inference : median latency [ms]: %lf, OK ? %d \n", 1e-6 * (double) sum / NR_RUN,
-    //        (int) valid);
+    printf("inference : median latency [ms]: %lf, OK ? %d \n", 1e-6 * (double) sum / NR_RUN,
+           (int) valid);
 
     // free synthetic input/output batch
     for (uint64_t k = 0; k < nr_embedding; k++) {
