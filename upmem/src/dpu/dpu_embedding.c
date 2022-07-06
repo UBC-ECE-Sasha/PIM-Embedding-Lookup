@@ -1,4 +1,5 @@
 // To build the code: dpu-upmem-dpurte-clang -o toy_dpu toy_dpu.c
+#include "common.h"
 #include "common/include/common.h"
 #include "emb_types.h"
 
@@ -27,25 +28,19 @@ __dma_aligned int32_t tmp_results[MAX_NR_BATCHES];
 
 int
 main() {
-    // DBG print emb_data content
-    // if (me() == 0) {
-    //     for (uint64_t i = 0; i < emb_nr_rows; i++) {
-    //         printf("emb [%lu] : %d\n", i, emb_data[i]); // get_emb_data(emb_data ,i));
-    //     }
-    // }
-    // return 0;
     if(me()==0){
         mram_read(&input_lengths, &lengths, ALIGN(sizeof(struct query_len),8));
         indices_len=lengths.indices_len;
         nr_batches=lengths.nr_batches;
 
-        mram_read(input_indices,indices,ALIGN(indices_len*sizeof(uint32_t),8));
-        mram_read(input_offsets,offsets,ALIGN(nr_batches*sizeof(uint32_t),8));
-
-        // for(uint32_t i=offsets[0]; i<offsets[0]+10; i++){
-        for(uint32_t i=0; i<10; i++){
-            printf("emb_data: %d\n",emb_data[i]);
+        uint32_t copied_indices=0;
+        while(copied_indices<indices_len){
+            mram_read(&input_indices[copied_indices],&indices[copied_indices],
+            ALIGN(MIN(2048, (indices_len-copied_indices)*sizeof(uint32_t)),8));
+            copied_indices+=2048/sizeof(uint32_t);
         }
+
+        mram_read(input_offsets,offsets,ALIGN(nr_batches*sizeof(uint32_t),8));
     }
     barrier_wait(&my_barrier);
 
