@@ -8,7 +8,6 @@
 #include <mram.h>
 
 __mram_noinit struct query_len input_lengths;
-__host uint64_t emb_nr_rows;
 __mram_noinit int32_t emb_data[MEGABYTE(14)];
 __mram_noinit uint32_t input_indices[MAX_INDEX_PER_BATCH * MAX_NR_BATCHES];
 __mram_noinit uint32_t input_offsets[MAX_NR_BATCHES];
