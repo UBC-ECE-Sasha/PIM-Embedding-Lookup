@@ -186,7 +186,6 @@ lookup(uint32_t **indices, uint32_t **offsets, struct input_info *input_info, ui
                     pow(10, -9);
             }
     }
-    return 0;
 
     // read dpu logs
     // DPU_FOREACH(dpu_set, dpu, dpu_index) {

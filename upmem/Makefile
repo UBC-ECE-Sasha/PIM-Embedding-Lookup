@@ -38,6 +38,6 @@ testdpu: FORCE
 	./build/emb
 
 tracedpu: FORCE
-	dpu-profiling functions -o dpu.json -a -A -f synthetic_inference -f populate_mram -f lookup -- ./build/emb
+	dpu-profiling functions -o dpu.json -a -A -f build_synthetic_input_data -f synthetic_inference -f populate_mram -f lookup -- ./build/emb
 
 FORCE: ;

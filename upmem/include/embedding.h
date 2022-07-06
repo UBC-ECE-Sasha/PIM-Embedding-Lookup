@@ -60,6 +60,12 @@ struct input_info {
     uint64_t *nr_batches_per_embedding;
     uint64_t *indices_len;
 };
+typedef struct input_batch {
+    bool valid;
+    uint32_t **indices;
+    uint32_t **offsets;
+    struct input_info *input_info;
+} input_batch;
 
 // static void
 // copy_interval(dpu_runtime_interval *interval, struct timespec *const start,
