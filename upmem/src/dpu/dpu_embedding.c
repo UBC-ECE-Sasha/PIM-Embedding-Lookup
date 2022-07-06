@@ -14,7 +14,9 @@ __mram_noinit uint32_t input_indices[MAX_INDEX_PER_BATCH * MAX_NR_BATCHES];
 __mram_noinit uint32_t input_offsets[MAX_NR_BATCHES];
 __mram_noinit int32_t results[MAX_NR_BATCHES];
 
-__host uint32_t counter_all, counter_init, counter_main;
+#ifdef PERFCOUNT
+__host uint32_t counter_all, counter_init;
+#endif
 
 BARRIER_INIT(my_barrier, NR_TASKLETS);
 
@@ -28,7 +30,9 @@ __dma_aligned int32_t tmp_results[MAX_NR_BATCHES];
 int
 main() {
     if (me() == 0) {
+#ifdef PERFCOUNT
         perfcounter_config(COUNT_CYCLES, true);
+#endif
 
         mram_read(&input_lengths, &lengths, ALIGN(sizeof(struct query_len), 8));
         indices_len = lengths.indices_len;
@@ -43,7 +47,9 @@ main() {
 
         mram_read(input_offsets, offsets, ALIGN(nr_batches * sizeof(uint32_t), 8));
 
+#ifdef PERFCOUNT
         counter_init = perfcounter_get();
+#endif
     }
     barrier_wait(&my_barrier);
 
@@ -67,9 +73,11 @@ main() {
         barrier_wait(&my_barrier);
     }
 
+#ifdef PERFCOUNT
     if (me() == 0) {
         counter_all = perfcounter_get();
     }
+#endif
 
     return 0;
 }
