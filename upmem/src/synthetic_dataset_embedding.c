@@ -167,8 +167,8 @@ synthetic_inference(int32_t **emb_tables, float **result_buffer, int32_t ***dpu_
     int sum = 0;
     for (int i = 0; i < NR_RUN; i++) {
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
-        lookup(indices, offsets, indices_len, nr_batches_per_embedding, result_buffer,
-               dpu_result_buffer);
+        lookup(indices, offsets, indices_len, nr_batches_per_embedding, nr_embedding, nr_cols,
+               result_buffer, dpu_result_buffer);
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
         sum += time_diff(start, end).tv_nsec;
     }

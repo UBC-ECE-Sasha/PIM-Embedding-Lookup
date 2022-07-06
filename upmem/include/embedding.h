@@ -72,4 +72,5 @@ post_process(struct dpu_set_t dpu_rank, uint64_t rank_id, void *arg);
 
 int32_t *
 lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len, uint64_t *nr_batches,
-       float **result_buffer, int32_t ***dpu_result_buffer);
+       uint64_t nr_embedding, uint64_t nr_cols, float **result_buffer,
+       int32_t ***dpu_result_buffer);
