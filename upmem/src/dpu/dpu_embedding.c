@@ -3,14 +3,14 @@
 #include "common/include/common.h"
 #include "emb_types.h"
 
-#include <attributes.h>
-#include <mram.h>
 #include <alloc.h>
+#include <attributes.h>
+#include <barrier.h>
+#include <defs.h>
+#include <mram.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <defs.h>
-#include <barrier.h>
 
 __mram_noinit struct query_len input_lengths;
 __host uint64_t emb_nr_rows;
@@ -21,9 +21,11 @@ __mram_noinit int32_t results[MAX_NR_BATCHES];
 
 BARRIER_INIT(my_barrier, NR_TASKLETS);
 
-uint32_t indices_len, nr_batches;
+uint64_t indices_len;
+uint64_t nr_batches;
 __dma_aligned struct query_len lengths;
-__dma_aligned uint32_t indices[MAX_INDEX_PER_BATCH * MAX_NR_BATCHES], offsets[MAX_NR_BATCHES];
+__dma_aligned uint32_t indices[MAX_INDEX_PER_BATCH * MAX_NR_BATCHES];
+__dma_aligned uint32_t offsets[MAX_NR_BATCHES];
 __dma_aligned int32_t tmp_results[MAX_NR_BATCHES];
 
 int
@@ -44,19 +46,18 @@ main() {
     }
     barrier_wait(&my_barrier);
 
-    for (uint64_t i=me(); i< nr_batches; i+=NR_TASKLETS){
-        tmp_results[i]=0;
-        uint32_t upper_bound = i==nr_batches-1 ? indices_len : offsets[i+1];
-        for(uint32_t indices_ptr=offsets[i]; indices_ptr<upper_bound; indices_ptr++)
-        {
+    for (uint64_t i = me(); i < nr_batches; i += NR_TASKLETS) {
+        tmp_results[i] = 0;
+        uint32_t upper_bound = i == nr_batches - 1 ? indices_len : offsets[i + 1];
+        for (uint32_t indices_ptr = offsets[i]; indices_ptr < upper_bound; indices_ptr++) {
             uint32_t ind = indices[indices_ptr];
-            tmp_results[i]+=emb_data[ind];
+            tmp_results[i] += emb_data[ind];
         }
     }
 
     barrier_wait(&my_barrier);
-    if(me()==0){
-        mram_write(tmp_results,results,ALIGN(nr_batches*sizeof(int32_t),8));
+    if (me() == 0) {
+        mram_write(tmp_results, results, ALIGN(nr_batches * sizeof(int32_t), 8));
     }
 
     return 0;
