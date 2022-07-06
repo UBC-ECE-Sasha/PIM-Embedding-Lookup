@@ -164,18 +164,19 @@ synthetic_inference(int32_t **emb_tables, float **result_buffer, uint64_t nr_emb
     }
 
     struct timespec start, end;
-    int sum = 0;
+    double sum = 0;
     for (int i = 0; i < NR_RUN; i++) {
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
         lookup(indices, offsets, indices_len, nr_batches_per_embedding, result_buffer);
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
-        sum += time_diff(start, end).tv_nsec;
+        struct timespec diff = time_diff(start, end);
+        sum += diff.tv_nsec + diff.tv_sec * 1000000000;
     }
     __attribute__((unused)) bool valid;
     valid = check_embedding_set_inference(emb_tables, nr_embedding, indices, offsets, indices_len,
                                           nr_batches, nr_cols, result_buffer);
 
-    printf("inference : median latency [ms]: %lf, OK ? %d \n", 1e-6 * (double) sum / NR_RUN,
+    printf("inference : average latency [ms]: %lf, OK ? %d \n", 1e-6 * sum / NR_RUN,
            (int) valid);
 
     // free synthetic input/output batch
