@@ -73,8 +73,6 @@ populate_mram(uint64_t nr_embedding, uint64_t nr_rows, uint64_t nr_cols, int32_t
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, "emb_data", 0,
                              ALIGN(nr_rows * sizeof(int32_t), 8), DPU_XFER_DEFAULT));
 
-    DPU_ASSERT(
-        dpu_broadcast_to(dpu_set, "emb_nr_rows", 0, &nr_rows, sizeof(uint64_t), DPU_XFER_DEFAULT));
     /* free transposed matrix of parameters */
     for (uint64_t embedding_index = 0; embedding_index < nr_embedding; embedding_index++)
         free(buffer_data[embedding_index]);
