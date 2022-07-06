@@ -180,6 +180,7 @@ lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len,
     // DPU_ASSERT(dpu_callback(dpu_set, post_process, (void *) &callback_data, DPU_CALLBACK_ASYNC));
     DPU_ASSERT(dpu_sync(dpu_set));
 
+#ifdef PERFCOUNT
     uint32_t counter_init, counter_all;
     DPU_FOREACH(dpu_set, dpu, dpu_index) {
         DPU_ASSERT(
@@ -188,6 +189,7 @@ lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len,
             dpu_copy_from(dpu, "counter_all", 0, &counter_all, sizeof(uint32_t)));
     }
     printf("DPU cycles: init %d all %d\n", counter_init, counter_all);
+#endif
 
     for (uint64_t embedding_index = 0; embedding_index < NR_EMBEDDING; embedding_index++) {
         for (uint64_t batch_index = 0; batch_index < nr_batches_per_embedding[embedding_index];
