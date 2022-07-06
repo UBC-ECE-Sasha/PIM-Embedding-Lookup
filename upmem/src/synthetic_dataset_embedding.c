@@ -211,20 +211,21 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, struct input_info *i
                     uint64_t nr_rows, uint64_t nr_cols) {
 
     struct timespec start, end;
-    int sum = 0;
+    double sum = 0;
     for (int i = 0; i < NR_RUN; i++) {
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
         lookup(indices, offsets, input_info, nr_embedding, nr_cols, result_buffer,
                dpu_result_buffer);
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
-        sum += time_diff(start, end).tv_nsec;
+        struct timespec diff = time_diff(start, end);
+        sum += diff.tv_nsec + diff.tv_sec * 1000000000;
     }
     __attribute__((unused)) bool valid;
     valid =
         check_embedding_set_inference(emb_tables, nr_embedding, indices, offsets,
                                       input_info->indices_len, nr_batches, nr_cols, result_buffer);
 
-    printf("inference : median latency [ms]: %lf, OK ? %d \n", 1e-6 * (double) sum / NR_RUN,
+    printf("inference : average latency [ms]: %lf, OK ? %d \n", 1e-6 * sum / NR_RUN,
            (int) valid);
 }
 
