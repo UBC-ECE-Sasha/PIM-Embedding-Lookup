@@ -102,7 +102,6 @@ check_embedding_set_inference(int32_t **emb_tables, uint64_t nr_embedding, uint3
                 // assert(index < nr_batches * indices_len[embedding_index]);
                 for (int col_index = 0; col_index < nr_cols;
                      col_index++) { /*Embedding reduction mode : ADD */
-                    assert(index * nr_cols + col_index < nr_batches * indices_len[embedding_index]);
                     tmp_result[col_index] +=
                         emb_tables[embedding_index][index * nr_cols + col_index];
                 }
