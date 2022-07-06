@@ -6,12 +6,15 @@
 #include <barrier.h>
 #include <defs.h>
 #include <mram.h>
+#include <perfcounter.h>
 
 __mram_noinit struct query_len input_lengths;
 __mram_noinit int32_t emb_data[MEGABYTE(14)];
 __mram_noinit uint32_t input_indices[MAX_INDEX_PER_BATCH * MAX_NR_BATCHES];
 __mram_noinit uint32_t input_offsets[MAX_NR_BATCHES];
 __mram_noinit int32_t results[MAX_NR_BATCHES];
+
+__host uint32_t counter_all, counter_init, counter_main;
 
 BARRIER_INIT(my_barrier, NR_TASKLETS);
 
@@ -25,6 +28,8 @@ __dma_aligned int32_t tmp_results[MAX_NR_BATCHES];
 int
 main() {
     if (me() == 0) {
+        perfcounter_config(COUNT_CYCLES, true);
+
         mram_read(&input_lengths, &lengths, ALIGN(sizeof(struct query_len), 8));
         indices_len = lengths.indices_len;
         nr_batches = lengths.nr_batches;
@@ -37,6 +42,8 @@ main() {
         }
 
         mram_read(input_offsets, offsets, ALIGN(nr_batches * sizeof(uint32_t), 8));
+
+        counter_init = perfcounter_get();
     }
     barrier_wait(&my_barrier);
 
@@ -51,7 +58,11 @@ main() {
 
     barrier_wait(&my_barrier);
     if (me() == 0) {
+        counter_main = perfcounter_get() - counter_init;
+
         mram_write(tmp_results, results, ALIGN(nr_batches * sizeof(int32_t), 8));
+
+        counter_all = perfcounter_get();
     }
 
     return 0;
