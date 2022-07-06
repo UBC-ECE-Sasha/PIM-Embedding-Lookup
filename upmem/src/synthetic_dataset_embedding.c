@@ -111,10 +111,10 @@ check_embedding_set_inference(int32_t **emb_tables, uint64_t nr_embedding, uint3
 
                 float dpu_result = results[embedding_index][batch_index * nr_cols + col_index];
                 float host_result = tmp_result[col_index];
-                // float diff = fabs(dpu_result * pow(10, 9) - host_result);
+                float diff = fabs(dpu_result * pow(10, 9) - host_result);
                 // printf("[%d][%d][%d]diff: %f\tdpu_result: %f\thost_result: %f\n",
-                // embedding_index, batch_index, col_index , diff, dpu_result * pow(10,9),
-                // host_result);
+                // embedding_index,
+                //       batch_index, col_index, diff, dpu_result * pow(10, 9), host_result);
                 /* check magnitude with arbitrary threshold */
                 if (fabs(dpu_result * pow(10, 9) - host_result) > 1000)
                     valid = false;
@@ -134,9 +134,9 @@ check_embedding_set_inference(int32_t **emb_tables, uint64_t nr_embedding, uint3
  *  @param nr_cols Embedding Number of columns (same for each embedding)
  */
 void
-synthetic_inference(int32_t **emb_tables, float **result_buffer, uint64_t nr_embedding,
-                    uint64_t nr_batches, uint64_t indices_per_batch, uint64_t nr_rows,
-                    uint64_t nr_cols) {
+synthetic_inference(int32_t **emb_tables, float **result_buffer, int32_t ***dpu_result_buffer,
+                    uint64_t nr_embedding, uint64_t nr_batches, uint64_t indices_per_batch,
+                    uint64_t nr_rows, uint64_t nr_cols) {
 
     // allocate synthetic input/output batch of indices
     uint32_t **indices = (uint32_t **) malloc(nr_embedding * sizeof(uint32_t *));
@@ -167,7 +167,8 @@ synthetic_inference(int32_t **emb_tables, float **result_buffer, uint64_t nr_emb
     int sum = 0;
     for (int i = 0; i < NR_RUN; i++) {
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
-        lookup(indices, offsets, indices_len, nr_batches_per_embedding, result_buffer);
+        lookup(indices, offsets, indices_len, nr_batches_per_embedding, result_buffer,
+               dpu_result_buffer);
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
         sum += time_diff(start, end).tv_nsec;
     }
@@ -207,22 +208,69 @@ free_result_buffer(float **buffer, uint64_t nr_embedding) {
     free(buffer);
 }
 
+int32_t ***
+alloc_dpu_result_buffer(uint64_t nr_embedding, uint64_t nr_batches, uint64_t nr_cols) {
+
+    // TODO : reduncency with definition in synthetic_inference
+    uint64_t *nr_batches_per_embedding = (uint64_t *) malloc(nr_embedding * sizeof(uint64_t));
+
+    for (uint64_t embedding_index = 0; embedding_index < nr_embedding; embedding_index++) {
+        nr_batches_per_embedding[embedding_index] = nr_batches;
+    }
+
+    int32_t ***dpu_result_buffer = (int32_t ***) malloc(nr_embedding * sizeof(int32_t **));
+    for (uint64_t dpu_index = 0; dpu_index < NR_DPUS; dpu_index++) {
+        uint64_t embedding_index = dpu_index / nr_cols;
+        uint64_t dpu_mod_index = dpu_index % nr_cols;
+        if (dpu_mod_index == 0)
+            dpu_result_buffer[embedding_index] = (int32_t **) malloc(nr_cols * sizeof(int32_t *));
+
+        dpu_result_buffer[embedding_index][dpu_mod_index] =
+            (int32_t *) malloc(nr_batches_per_embedding[embedding_index] * sizeof(int32_t));
+    }
+
+    // TODO remove this
+    free(nr_batches_per_embedding);
+
+    return dpu_result_buffer;
+}
+
+void
+free_dpu_result_buffer(int32_t ***dpu_result_buffer, uint64_t nr_cols) {
+
+    for (uint64_t dpu_index = 0; dpu_index < NR_DPUS; dpu_index++) {
+        uint64_t embedding_index = dpu_index / nr_cols;
+        uint64_t dpu_mod_index = dpu_index % nr_cols;
+        free(dpu_result_buffer[embedding_index][dpu_mod_index]);
+    }
+    for (uint64_t dpu_index = 0; dpu_index < NR_DPUS; dpu_index++) {
+        uint64_t embedding_index = dpu_index / nr_cols;
+        uint64_t dpu_mod_index = dpu_index % nr_cols;
+        if (dpu_mod_index == 0)
+            free(dpu_result_buffer[embedding_index]);
+    }
+    // TODO remove this
+    free(dpu_result_buffer);
+}
+
 /** @brief synthetize embedding table, input indices and perform DPU embedding table */
 int
 main() {
 
+    NR_DPUS = NR_COLS * NR_EMBEDDING;
+
     /* alloc final results buffer */
     float **result_buffer = alloc_result_buffer(NR_EMBEDDING, NR_BATCHES, NR_COLS);
-
-    NR_DPUS = NR_COLS * NR_EMBEDDING;
+    int32_t ***dpu_result_buffer = alloc_dpu_result_buffer(NR_EMBEDDING, NR_BATCHES, NR_COLS);
 
     printf("alloc dpus %lu \n", NR_DPUS);
     alloc_dpus(NR_DPUS);
     int32_t **emb_tables = alloc_emb_tables(NR_ROWS, NR_COLS, NR_EMBEDDING);
     synthetic_populate(emb_tables, NR_ROWS, NR_COLS, NR_EMBEDDING);
-    synthetic_inference(emb_tables, result_buffer, NR_EMBEDDING, NR_BATCHES, INDEX_PER_BATCH,
-                        NR_ROWS, NR_COLS);
+    synthetic_inference(emb_tables, result_buffer, dpu_result_buffer, NR_EMBEDDING, NR_BATCHES,
+                        INDEX_PER_BATCH, NR_ROWS, NR_COLS);
 
     free_result_buffer(result_buffer, NR_EMBEDDING);
+    free_dpu_result_buffer(dpu_result_buffer, NR_COLS);
     free_emb_tables(emb_tables, NR_EMBEDDING);
 }

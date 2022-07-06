@@ -52,10 +52,6 @@ populate_mram(uint64_t nr_embedding, uint64_t nr_rows, uint64_t nr_cols, int32_t
                     emb_tables[embedding_index][row_index * nr_cols + col_index];
             }
     }
-    // for (uint64_t embedding_index = 0; embedding_index < nr_embedding; embedding_index++) {
-    //     for (uint64_t i = 0; i < nr_rows * nr_cols; i++)
-    //         printf("emb %d\n", buffer_data[embedding_index][i]);
-    // }
 
     struct dpu_set_t dpu;
     uint64_t embedding_index = 0;
@@ -107,7 +103,7 @@ post_process(struct dpu_set_t dpu_rank, uint64_t rank_id, void *arg) {
         for (int j = 0; j < NR_COLS; j++) {
             for (int k = 0; k < nr_batches[rank_id]; k++)
                 result_buffer[rank_id][k * NR_COLS + j] =
-                    (float) input->tmp_results[rank_id][j][k] * pow(10, -9);
+                    (float) input->dpu_results_buffer[rank_id][j][k] * pow(10, -9);
         }
     }
     return status;
@@ -125,7 +121,7 @@ post_process(struct dpu_set_t dpu_rank, uint64_t rank_id, void *arg) {
  */
 int32_t *
 lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len,
-       uint64_t *nr_batches_per_embedding, float **result_buffer) {
+       uint64_t *nr_batches_per_embedding, float **result_buffer, int32_t ***dpu_result_buffer) {
     uint64_t dpu_index;
     uint64_t embedding_id;
     struct dpu_set_t dpu;
@@ -136,7 +132,7 @@ lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len,
         DPU_ASSERT(dpu_prepare_xfer(dpu, indices[(int) (dpu_index / NR_COLS)]));
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, "input_indices", 0,
-                             ALIGN(indices_len[0] * sizeof(uint32_t), 8), DPU_XFER_DEFAULT));
+                             ALIGN(indices_len[0] * sizeof(uint32_t), 8), DPU_XFER_ASYNC));
 
     // TODO: loop over embeddings
     DPU_FOREACH(dpu_set, dpu, dpu_index) {
@@ -144,7 +140,7 @@ lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len,
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, "input_offsets", 0,
                              ALIGN(nr_batches_per_embedding[0] * sizeof(uint32_t), 8),
-                             DPU_XFER_DEFAULT));
+                             DPU_XFER_ASYNC));
 
     DPU_FOREACH(dpu_set, dpu, dpu_index) {
         embedding_id = (int) (dpu_index / NR_COLS);
@@ -156,39 +152,33 @@ lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len,
     }
 
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, "input_lengths", 0, sizeof(struct query_len),
-                             DPU_XFER_DEFAULT));
+                             DPU_XFER_ASYNC));
 
-    DPU_ASSERT(dpu_launch(dpu_set, DPU_SYNCHRONOUS));
+    DPU_ASSERT(dpu_launch(dpu_set, DPU_ASYNCHRONOUS));
 
-    int32_t ***tmp_results = (int32_t ***) malloc(NR_EMBEDDING * sizeof(int32_t **));
     DPU_FOREACH(dpu_set, dpu, dpu_index) {
         embedding_id = dpu_index / NR_COLS;
-        if (dpu_index % NR_COLS == 0) {
-            tmp_results[embedding_id] = (int32_t **) malloc(NR_COLS * sizeof(int32_t *));
-        }
+        uint64_t dpu_mod_index = dpu_index % NR_COLS;
         assert(nr_batches_per_embedding[embedding_id] == nr_batches_per_embedding[0]);
-        tmp_results[embedding_id][dpu_index % NR_COLS] =
-            (int32_t *) malloc(nr_batches_per_embedding[embedding_id] * sizeof(int32_t));
-        DPU_ASSERT(dpu_prepare_xfer(dpu, &tmp_results[embedding_id][dpu_index % NR_COLS][0]));
+        DPU_ASSERT(dpu_prepare_xfer(dpu, dpu_result_buffer[embedding_id][dpu_mod_index]));
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_FROM_DPU, "results", 0,
                              ALIGN(sizeof(int32_t) * nr_batches_per_embedding[0], 8),
-                             DPU_XFER_DEFAULT));
+                             DPU_XFER_ASYNC));
 
     struct callback_input callback_data;
     callback_data.result_buffer = result_buffer;
     callback_data.nr_batches = nr_batches_per_embedding;
-    callback_data.tmp_results = tmp_results;
+    callback_data.dpu_results_buffer = dpu_result_buffer;
 
-    // DPU_ASSERT(dpu_callback(dpu_set, post_process, (void *) &callback_data, DPU_CALLBACK_ASYNC));
     DPU_ASSERT(dpu_sync(dpu_set));
-
     for (uint64_t embedding_index = 0; embedding_index < NR_EMBEDDING; embedding_index++) {
         for (uint64_t batch_index = 0; batch_index < nr_batches_per_embedding[embedding_index];
              batch_index++)
             for (uint64_t col_index = 0; col_index < NR_COLS; col_index++) {
                 result_buffer[embedding_index][batch_index * NR_COLS + col_index] =
-                    (float) callback_data.tmp_results[embedding_index][col_index][batch_index] *
+                    (float)
+                        callback_data.dpu_results_buffer[embedding_index][col_index][batch_index] *
                     pow(10, -9);
             }
     }
