@@ -126,8 +126,8 @@ post_process(struct dpu_set_t dpu_rank, uint64_t rank_id, void *arg) {
 int32_t *
 lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len,
        uint64_t *nr_batches_per_embedding, float **result_buffer) {
-    int dpu_index;
-    int embedding_id;
+    uint64_t dpu_index;
+    uint64_t embedding_id;
     struct dpu_set_t dpu;
     struct query_len lengths[NR_EMBEDDING];
 
@@ -162,7 +162,7 @@ lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len,
 
     int32_t ***tmp_results = (int32_t ***) malloc(NR_EMBEDDING * sizeof(int32_t **));
     DPU_FOREACH(dpu_set, dpu, dpu_index) {
-            embedding_id = dpu_index / NR_COLS;
+        embedding_id = dpu_index / NR_COLS;
         if (dpu_index % NR_COLS == 0) {
             tmp_results[embedding_id] = (int32_t **) malloc(NR_COLS * sizeof(int32_t *));
         }
@@ -184,7 +184,8 @@ lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len,
     DPU_ASSERT(dpu_sync(dpu_set));
 
     for (uint64_t embedding_index = 0; embedding_index < NR_EMBEDDING; embedding_index++) {
-        for (uint64_t batch_index = 0; batch_index < nr_batches_per_embedding[embedding_index]; batch_index++)
+        for (uint64_t batch_index = 0; batch_index < nr_batches_per_embedding[embedding_index];
+             batch_index++)
             for (uint64_t col_index = 0; col_index < NR_COLS; col_index++) {
                 result_buffer[embedding_index][batch_index * NR_COLS + col_index] =
                     (float) callback_data.tmp_results[embedding_index][col_index][batch_index] *

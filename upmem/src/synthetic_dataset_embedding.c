@@ -112,7 +112,9 @@ check_embedding_set_inference(int32_t **emb_tables, uint64_t nr_embedding, uint3
                 float dpu_result = results[embedding_index][batch_index * nr_cols + col_index];
                 float host_result = tmp_result[col_index];
                 // float diff = fabs(dpu_result * pow(10, 9) - host_result);
-                // printf("[%d][%d][%d]diff: %f\tdpu_result: %f\thost_result: %f\n", embedding_index, batch_index, col_index , diff, dpu_result * pow(10,9), host_result);
+                // printf("[%d][%d][%d]diff: %f\tdpu_result: %f\thost_result: %f\n",
+                // embedding_index, batch_index, col_index , diff, dpu_result * pow(10,9),
+                // host_result);
                 /* check magnitude with arbitrary threshold */
                 if (fabs(dpu_result * pow(10, 9) - host_result) > 1000)
                     valid = false;
