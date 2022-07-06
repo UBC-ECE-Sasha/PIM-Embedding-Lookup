@@ -3,14 +3,9 @@
 #include "common/include/common.h"
 #include "emb_types.h"
 
-#include <alloc.h>
-#include <attributes.h>
 #include <barrier.h>
 #include <defs.h>
 #include <mram.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
 
 __mram_noinit struct query_len input_lengths;
 __host uint64_t emb_nr_rows;
@@ -51,7 +46,6 @@ main() {
         uint64_t upper_bound = i == nr_batches - 1 ? indices_len : offsets[i + 1];
         for (uint64_t indices_ptr = offsets[i]; indices_ptr < upper_bound; indices_ptr++) {
             uint64_t ind = indices[indices_ptr];
-            // printf("ind %lu indices ptr %lu\n", ind, indices_ptr);
             tmp_results[i] += emb_data[ind];
         }
     }
