@@ -22,8 +22,7 @@ struct dpu_set_t dpu_set;
 /** @brief alloc dpu set with given number of dpus */
 void
 alloc_dpus(uint64_t nr_dpus) {
-    // assert(dpu_set == NULL);
-    DPU_ASSERT(dpu_alloc(nr_dpus, NULL, &dpu_set));
+    DPU_ASSERT(dpu_alloc(nr_dpus, "nrJobsPerRank=256", &dpu_set));
     DPU_ASSERT(dpu_load(dpu_set, DPU_BINARY, NULL));
 }
 
