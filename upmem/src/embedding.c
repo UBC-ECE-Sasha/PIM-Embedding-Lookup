@@ -69,8 +69,6 @@ populate_mram(uint64_t nr_embedding, uint64_t nr_rows, uint64_t nr_cols, int32_t
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, "emb_data", 0,
                              ALIGN(nr_rows * sizeof(int32_t), 8), DPU_XFER_DEFAULT));
 
-    DPU_ASSERT(
-        dpu_broadcast_to(dpu_set, "emb_nr_rows", 0, &nr_rows, sizeof(uint64_t), DPU_XFER_DEFAULT));
     /* free transposed matrix of parameters */
     for (uint64_t embedding_index = 0; embedding_index < nr_embedding; embedding_index++)
         free(buffer_data[embedding_index]);
@@ -176,13 +174,24 @@ lookup(uint32_t **indices, uint32_t **offsets, struct input_info *input_info, ui
     callback_data.dpu_results_buffer = dpu_result_buffer;
 
     DPU_ASSERT(dpu_sync(dpu_set));
+
+#ifdef PERFCOUNT
+    uint32_t counter_init, counter_all;
+    DPU_FOREACH(dpu_set, dpu, dpu_index) {
+        DPU_ASSERT(
+            dpu_copy_from(dpu, "counter_init", 0, &counter_init, sizeof(uint32_t)));
+        DPU_ASSERT(
+            dpu_copy_from(dpu, "counter_all", 0, &counter_all, sizeof(uint32_t)));
+    }
+    printf("DPU cycles: init %d all %d\n", counter_init, counter_all);
+#endif
+
     for (uint64_t embedding_index = 0; embedding_index < nr_embedding; embedding_index++) {
-        for (uint64_t batch_index = 0;
-             batch_index < input_info->nr_batches_per_embedding[embedding_index]; batch_index++)
+        for (uint64_t batch_index = 0; batch_index < input_info->nr_batches_per_embedding[embedding_index];
+             batch_index++)
             for (uint64_t col_index = 0; col_index < nr_cols; col_index++) {
                 result_buffer[embedding_index][batch_index * nr_cols + col_index] =
-                    (float)
-                        callback_data.dpu_results_buffer[embedding_index][col_index][batch_index] *
+                    (float) callback_data.dpu_results_buffer[embedding_index][col_index][batch_index] *
                     pow(10, -9);
             }
     }

@@ -221,7 +221,8 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, struct input_info *i
         lookup(indices, offsets, input_info, nr_embedding, nr_cols, result_buffer,
                dpu_result_buffer);
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
-        sum += time_diff(start, end).tv_nsec;
+        struct timespec diff = time_diff(start, end);
+        sum += diff.tv_nsec + diff.tv_sec * 1000000000;
     }
     __attribute__((unused)) bool valid;
     valid =
