@@ -69,7 +69,7 @@ main() {
         }
         barrier_wait(&my_barrier);
         if (me() == 0)
-            mram_write(tmp_results, &results[batch_start], ALIGN(batch_end - batch_start * sizeof(int32_t), 8));
+            mram_write(tmp_results, &results[batch_start], ALIGN((batch_end - batch_start) * sizeof(int32_t), 8));
         barrier_wait(&my_barrier);
     }
 
