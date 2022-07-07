@@ -82,7 +82,7 @@ populate_mram(uint64_t nr_embedding, uint64_t nr_rows, uint64_t nr_cols, int32_t
             uint32_t cur_emb_ = 0;
             for (; cur_emb_ < rank_nr_full_embedding_; cur_emb_++) {
                 rank_mapping->embedding_index[rank_index][cur_emb_] = cur_emb;
-                rank_mapping->embedding_start_pos[rank_index][cur_emb_] = cur_col;
+                rank_mapping->embedding_start_pos[rank_index][cur_emb_] = 0;
                 cur_col += nr_cols;
                 cur_emb += 1;
             }
@@ -94,15 +94,15 @@ populate_mram(uint64_t nr_embedding, uint64_t nr_rows, uint64_t nr_cols, int32_t
             }
         }
     }
-    // for (uint32_t rank_index = 0; rank_index < rank_mapping->nr_ranks; rank_index++) {
-    //     printf("rank [%u] %u \n", rank_index, rank_mapping->rank_nr_embedding[rank_index]);
-    //     for (uint32_t cur_emb_ = 0; cur_emb_ < rank_mapping->rank_nr_embedding[rank_index];
-    //          cur_emb_++) {
-    //         printf("rank [%u][%u] : index %u start %u \n", rank_index, cur_emb_,
-    //                rank_mapping->embedding_index[rank_index][cur_emb_],
-    //                rank_mapping->embedding_start_pos[rank_index][cur_emb_]);
-    //     }
-    // }
+    for (uint32_t rank_index = 0; rank_index < rank_mapping->nr_ranks; rank_index++) {
+        printf("rank [%u] %u \n", rank_index, rank_mapping->rank_nr_embedding[rank_index]);
+        for (uint32_t cur_emb_ = 0; cur_emb_ < rank_mapping->rank_nr_embedding[rank_index];
+             cur_emb_++) {
+            printf("rank [%u][%u] : index %u start %u \n", rank_index, cur_emb_,
+                   rank_mapping->embedding_index[rank_index][cur_emb_],
+                   rank_mapping->embedding_start_pos[rank_index][cur_emb_]);
+        }
+    }
     uint32_t nr_dpus;
     DPU_ASSERT(dpu_get_nr_dpus(dpu_set, &nr_dpus));
     assert(nr_embedding * nr_cols == (uint64_t) nr_dpus);
@@ -186,11 +186,13 @@ gather_rank_embedding_results(struct dpu_set_t rank, uint32_t rank_index, void *
         for (uint64_t batch_index = 0; batch_index < nr_batches_per_embedding[embedding_index];
              batch_index++) {
             for (uint64_t col_index = 0; col_index < nr_cols; col_index++) {
+                int32_t dpu_result = dpu_results_buffer[embedding_index][col_index][batch_index];
+
                 result_buffer[embedding_index][batch_index * nr_cols + embeddding_start_pos +
-                                               col_index] =
-                    (float) dpu_results_buffer[embedding_index][embeddding_start_pos + col_index]
-                                              [batch_index] *
-                    pow(10, -9);
+                                               col_index] = (float) dpu_result;
+
+                printf(" dpu_results_buffer [%lu][%lu][%lu] %u\n", embedding_index, col_index,
+                       batch_index, dpu_result);
             }
         }
     }
@@ -259,13 +261,14 @@ lookup(uint32_t **indices, uint32_t **offsets, struct input_info *input_info,
                              ALIGN(sizeof(int32_t) * input_info->nr_batches_per_embedding[0], 8),
                              DPU_XFER_ASYNC));
 
+    callback_data->nr_cols = nr_cols;
     callback_data->result_buffer = result_buffer;
     callback_data->nr_batches_per_embedding = input_info->nr_batches_per_embedding;
     callback_data->dpu_results_buffer = dpu_result_buffer;
     callback_data->rank_mapping_info = rank_mapping_info;
     DPU_ASSERT(
         dpu_callback(dpu_set, gather_rank_embedding_results, callback_data, DPU_CALLBACK_ASYNC));
-    // DPU_ASSERT(dpu_sync(dpu_set));
+    DPU_ASSERT(dpu_sync(dpu_set));
     // DPU_FOREACH(dpu_set, dpu, dpu_index) {
     //     // if(dpu_index==0)
     //     DPU_ASSERT(dpu_log_read(dpu, stdout));
