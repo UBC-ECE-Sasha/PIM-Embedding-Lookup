@@ -116,9 +116,8 @@ check_embedding_set_inference(int32_t **emb_tables, uint64_t nr_embedding, uint3
                 float host_result = tmp_result[col_index];
                 __attribute__((unused)) float diff;
                 diff = fabs(dpu_result * pow(10, 9) - host_result);
-                // printf("[%d][%d][%d]diff: %f\tdpu_result: %f\thost_result: %f\n",
-                // embedding_index,
-                //       batch_index, col_index, diff, dpu_result * pow(10, 9), host_result);
+                printf("[%d][%d][%d]diff: %f\tdpu_result: %f\thost_result: %f\n", embedding_index,
+                       batch_index, col_index, diff, dpu_result * pow(10, 9), host_result);
                 /* check magnitude with arbitrary threshold */
                 if (fabs(dpu_result * pow(10, 9) - host_result) > 1000)
                     valid = false;
@@ -229,7 +228,7 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, struct input_info *i
         check_embedding_set_inference(emb_tables, nr_embedding, indices, offsets,
                                       input_info->indices_len, nr_batches, nr_cols, result_buffer);
 
-    printf("inference : median latency [ms]: %lf, OK ? %d \r", 1e-6 * (double) sum / NR_RUN,
+    printf("inference : median latency [ms]: %lf, OK ? %d \n", 1e-6 * (double) sum / NR_RUN,
            (int) valid);
 }
 
