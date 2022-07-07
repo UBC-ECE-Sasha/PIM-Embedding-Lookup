@@ -1,18 +1,8 @@
 .PHONY:all
 
-#MAX_INDEX_PER_BATCH=128
-#MAX_NR_BATCHES=64
-#NR_COLS=16
-#NR_BATCHES=37
-#NR_RUN=10
-#INDEX_PER_BATCH=128
-#NR_ROWS=5000
-#NR_EMBEDDING=37
-#NR_TASKLETS=16
-
 MAX_INDEX_PER_BATCH=32
 MAX_NR_BATCHES=64
-NR_COLS=64
+NR_COLS=11
 NR_BATCHES=64
 NR_RUN=100
 INDEX_PER_BATCH=32
@@ -38,6 +28,6 @@ testdpu: FORCE
 	./build/emb
 
 tracedpu: FORCE
-	dpu-profiling functions -o dpu.json -a -A -f build_synthetic_input_data -f synthetic_inference -f populate_mram -f lookup -- ./build/emb
+	dpu-profiling functions -o dpu.json -a -A -f gather_rank_embedding_results  -f build_synthetic_input_data -f synthetic_inference -f populate_mram -f lookup -- ./build/emb
 
 FORCE: ;

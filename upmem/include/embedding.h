@@ -67,6 +67,14 @@ typedef struct input_batch {
     struct input_info *input_info;
 } input_batch;
 
+typedef struct embeding_rank_mapping {
+    uint32_t nr_ranks;
+    uint32_t *rank_nr_dpus;
+    uint32_t *rank_nr_embedding;
+    uint32_t **embedding_index;
+    uint32_t **embedding_start_pos;
+} embedding_rank_mapping;
+
 // static void
 // copy_interval(dpu_runtime_interval *interval, struct timespec *const start,
 //               struct timespec *const end);
@@ -75,6 +83,9 @@ void
 alloc_dpus(uint64_t nr_dpus);
 
 void
+free_embedding_rank_mapping(embedding_rank_mapping *rank_mapping);
+
+embedding_rank_mapping *
 populate_mram(uint64_t nr_embedding, uint64_t nr_rows, uint64_t nr_cols, int32_t **table_data,
               dpu_runtime_totals *runtime);
 
@@ -82,5 +93,12 @@ dpu_error_t
 post_process(struct dpu_set_t dpu_rank, uint64_t rank_id, void *arg);
 
 int32_t *
-lookup(uint32_t **indices, uint32_t **offsets, struct input_info *input_info, uint64_t nr_embedding,
-       uint64_t nr_cols, float **result_buffer, int32_t ***dpu_result_buffer);
+lookup(uint32_t **indices, uint32_t **offsets, struct input_info *input_info,
+       embedding_rank_mapping *rank_mapping_info, uint64_t nr_embedding, uint64_t nr_cols,
+       float **result_buffer, int32_t ***dpu_result_buffer);
+
+void
+free_embedding_dpu_backend();
+
+void
+alloc_embedding_dpu_backend();
