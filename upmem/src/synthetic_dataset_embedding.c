@@ -51,7 +51,7 @@ free_emb_tables(int32_t **emb_tables, uint64_t nr_embedding) {
     free(emb_tables);
 }
 
-void
+embedding_rank_mapping *
 synthetic_populate(int32_t **emb_tables, uint64_t nr_rows, uint64_t nr_cols,
                    uint64_t nr_embedding) {
 
@@ -64,7 +64,9 @@ synthetic_populate(int32_t **emb_tables, uint64_t nr_rows, uint64_t nr_cols,
     }
 
     /* store one embedding to DPU MRAM */
-    populate_mram(nr_embedding, nr_rows, nr_cols, emb_tables, NULL);
+    embedding_rank_mapping *rank_mapping_info =
+        populate_mram(nr_embedding, nr_rows, nr_cols, emb_tables, NULL);
+    return rank_mapping_info;
 }
 
 /** @brief check DPU embedding inference result for each embedding and each batch
@@ -208,17 +210,18 @@ build_synthetic_input_data(uint32_t **indices, uint32_t **offsets, struct input_
  */
 void
 synthetic_inference(uint32_t **indices, uint32_t **offsets, struct input_info *input_info,
-                    int32_t **emb_tables, float **result_buffer, int32_t ***dpu_result_buffer,
-                    uint64_t nr_embedding, uint64_t nr_batches, uint64_t indices_per_batch,
-                    uint64_t nr_rows, uint64_t nr_cols) {
+                    embedding_rank_mapping *rank_mapping_info, int32_t **emb_tables,
+                    float **result_buffer, int32_t ***dpu_result_buffer, uint64_t nr_embedding,
+                    uint64_t nr_batches, uint64_t indices_per_batch, uint64_t nr_rows,
+                    uint64_t nr_cols) {
 
     uint64_t multi_run = 1;
     struct timespec start, end, diff;
     double sum = 0;
     for (int i = 0; i < multi_run; i++) {
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
-        lookup(indices, offsets, input_info, nr_embedding, nr_cols, result_buffer,
-               dpu_result_buffer);
+        lookup(indices, offsets, input_info, rank_mapping_info, nr_embedding, nr_cols,
+               result_buffer, dpu_result_buffer);
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
         diff = time_diff(start, end);
         sum += diff.tv_nsec + diff.tv_sec * 1e9;
@@ -437,6 +440,7 @@ main() {
     NR_DPUS = NR_COLS * NR_EMBEDDING;
 
     FIFO_POOL = alloc_fifo_pool();
+    alloc_embedding_dpu_backend();
 
     /* alloc final results buffer */
     float **result_buffer = alloc_result_buffer(NR_EMBEDDING, NR_BATCHES, NR_COLS);
@@ -447,7 +451,8 @@ main() {
     int32_t **emb_tables = alloc_emb_tables(NR_ROWS, NR_COLS, NR_EMBEDDING);
 
     /* creates synthetic embedding parametes and transfet it to DPU MRAM */
-    synthetic_populate(emb_tables, NR_ROWS, NR_COLS, NR_EMBEDDING);
+    embedding_rank_mapping *rank_mapping_info =
+        synthetic_populate(emb_tables, NR_ROWS, NR_COLS, NR_EMBEDDING);
 
     INIT_THREAD_POOL(&THREAD_POOL);
 
@@ -463,8 +468,8 @@ main() {
         }
 
         /* perform inference */
-        synthetic_inference(batch->indices, batch->offsets, batch->input_info, emb_tables,
-                            result_buffer, dpu_result_buffer, NR_EMBEDDING, NR_BATCHES,
+        synthetic_inference(batch->indices, batch->offsets, batch->input_info, rank_mapping_info,
+                            emb_tables, result_buffer, dpu_result_buffer, NR_EMBEDDING, NR_BATCHES,
                             INDEX_PER_BATCH, NR_ROWS, NR_COLS);
 
         FIFO_POP_RELEASE(*INPUT_FIFO);
@@ -476,4 +481,5 @@ main() {
     free_emb_tables(emb_tables, NR_EMBEDDING);
 
     free_fifo_pool(FIFO_POOL);
+    free_embedding_dpu_backend();
 }

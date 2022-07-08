@@ -49,6 +49,8 @@ testdpu: FORCE
 
 tracedpu: FORCE
 	dpu-profiling functions -o dpu.json -a -A \
+		-f gather_rank_embedding \
+		-f build_synthetic_input_data \
 		-f synthetic_inference \
 		-f populate_mram \
 		-f lookup \
