@@ -56,6 +56,17 @@ typedef struct dpu_runtime_group {
     dpu_runtime_interval *intervals;
 } dpu_runtime_group;
 
+struct input_info {
+    uint64_t *nr_batches_per_embedding;
+    uint64_t *indices_len;
+};
+typedef struct input_batch {
+    bool valid;
+    uint32_t **indices;
+    uint32_t **offsets;
+    struct input_info *input_info;
+} input_batch;
+
 // static void
 // copy_interval(dpu_runtime_interval *interval, struct timespec *const start,
 //               struct timespec *const end);
@@ -71,5 +82,5 @@ dpu_error_t
 post_process(struct dpu_set_t dpu_rank, uint64_t rank_id, void *arg);
 
 int32_t *
-lookup(uint32_t **indices, uint32_t **offsets, uint64_t *indices_len, uint64_t *nr_batches,
-       float **result_buffer);
+lookup(uint32_t **indices, uint32_t **offsets, struct input_info *input_info, uint64_t nr_embedding,
+       uint64_t nr_cols, float **result_buffer, int32_t ***dpu_result_buffer);

@@ -26,5 +26,7 @@ struct query_len {
 struct callback_input {
     float **result_buffer;
     uint64_t *nr_batches;
-    int32_t ***tmp_results;
+    int32_t ***dpu_results_buffer;
+    uint64_t nr_cols;
+    uint64_t nr_embedding;
 };
