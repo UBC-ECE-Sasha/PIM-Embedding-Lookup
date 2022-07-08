@@ -187,12 +187,11 @@ lookup(uint32_t **indices, uint32_t **offsets, struct input_info *input_info, ui
 #endif
 
     for (uint64_t embedding_index = 0; embedding_index < nr_embedding; embedding_index++) {
-        for (uint64_t batch_index = 0;
-             batch_index < input_info->nr_batches_per_embedding[embedding_index]; batch_index++)
+        for (uint64_t batch_index = 0; batch_index < input_info->nr_batches_per_embedding[embedding_index];
+             batch_index++)
             for (uint64_t col_index = 0; col_index < nr_cols; col_index++) {
                 result_buffer[embedding_index][batch_index * nr_cols + col_index] =
-                    (float)
-                        callback_data.dpu_results_buffer[embedding_index][col_index][batch_index] *
+                    (float) callback_data.dpu_results_buffer[embedding_index][col_index][batch_index] *
                     pow(10, -9);
             }
     }

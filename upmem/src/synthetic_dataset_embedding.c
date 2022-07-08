@@ -1,14 +1,17 @@
 #include "embedding.h"
+#include "fifo.h"
 
 #include <assert.h>
 #include <dpu.h>
 #include <math.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
 static uint64_t NR_DPUS;
+struct FIFO_POOL *FIFO_POOL;
 
 /** @brief compute time difference from to timespec */
 struct timespec
@@ -175,9 +178,8 @@ free_input_info(struct input_info *info) {
 
 void
 build_synthetic_input_data(uint32_t **indices, uint32_t **offsets, struct input_info *input_info,
-                           int32_t **emb_tables, float **result_buffer,
-                           int32_t ***dpu_result_buffer, uint64_t nr_embedding, uint64_t nr_batches,
-                           uint64_t indices_per_batch, uint64_t nr_rows, uint64_t nr_cols) {
+                           uint64_t nr_embedding, uint64_t nr_batches, uint64_t indices_per_batch,
+                           uint64_t nr_rows, uint64_t nr_cols) {
 
     // creates synthetic input batch of indices
     for (uint64_t k = 0; k < nr_embedding; k++) {
@@ -210,9 +212,10 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, struct input_info *i
                     uint64_t nr_embedding, uint64_t nr_batches, uint64_t indices_per_batch,
                     uint64_t nr_rows, uint64_t nr_cols) {
 
+    uint64_t multi_run = 1;
     struct timespec start, end, diff;
     double sum = 0;
-    for (int i = 0; i < NR_RUN; i++) {
+    for (int i = 0; i < multi_run; i++) {
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
         lookup(indices, offsets, input_info, nr_embedding, nr_cols, result_buffer,
                dpu_result_buffer);
@@ -297,19 +300,147 @@ free_dpu_result_buffer(int32_t ***dpu_result_buffer, uint64_t nr_cols) {
     free(dpu_result_buffer);
 }
 
+#define THREAD_POOL_NR_THREAD 1
+struct THREAD_POOL {
+    pthread_t th[THREAD_POOL_NR_THREAD];
+} THREAD_POOL;
+
+#define STAGE_0_DEPTH 2
+#define STAGE_1_DEPTH 2
+
+struct FIFO_POOL {
+    FIFO stage_0;
+    FIFO stage_1;
+};
+
+struct FIFO_POOL *
+alloc_fifo_pool() {
+
+    struct FIFO_POOL *this = malloc(sizeof(struct FIFO_POOL));
+
+    {
+        printf("alloc FIFO [build_synthetic_input_data->inference], DEPTH(%u)\n", STAGE_0_DEPTH);
+        input_batch *batch = malloc(sizeof(input_batch) * STAGE_0_DEPTH);
+        for (uint64_t i = 0; i < STAGE_0_DEPTH; i++) {
+            struct input_info *input_info =
+                alloc_input_info(NR_EMBEDDING, NR_BATCHES, INDEX_PER_BATCH);
+            uint32_t **indices = alloc_indices_buffer(NR_EMBEDDING, NR_BATCHES, INDEX_PER_BATCH);
+            uint32_t **offsets = alloc_offset_buffer(NR_EMBEDDING, NR_BATCHES, INDEX_PER_BATCH);
+            batch[i].indices = indices;
+            batch[i].offsets = offsets;
+            batch[i].input_info = input_info;
+        }
+        FIFO_INIT(&(this->stage_0), (void *) (batch), STAGE_0_DEPTH, sizeof(input_batch), 1, 1);
+    }
+    {
+        // printf("alloc FIFO [inference->merge_results], DEPTH(%u)\n", STAGE_1_DEPTH);
+        // uint8_t *d_buff = malloc(PIPELINE_FIFO_COMMAND_DEPTH);
+        // FIFO_INIT(&(this->command), (void *) (command_buff), PIPELINE_FIFO_COMMAND_DEPTH,
+        //           sizeof(uint8_t), 1, 1);
+    }
+    return this;
+}
+
+void
+free_fifo_pool(struct FIFO_POOL *this) {
+
+    {
+        FIFO *fifo = &(this->stage_0);
+        printf("free FIFO [build_synthetic_input_data->inference], DEPTH(%lu)\n", fifo->depth);
+        input_batch *batch = (input_batch *) (fifo->items[0]);
+        for (uint64_t i = 0; i < STAGE_0_DEPTH; i++) {
+            free_indices_buffer(batch[i].indices, NR_EMBEDDING);
+            free_offset_buffer(batch[i].offsets, NR_EMBEDDING);
+            free_input_info(batch[i].input_info);
+        }
+        free(batch);
+        FIFO_FREE(fifo);
+    }
+    {
+        // FIFO *fifo = &(this->stage_1);
+        // printf("free FIFO [inference->merge_results], DEPTH(%lu)\n", fifo->depth);
+        // // uint8_t *buffer = (uint8_t *) (fifo->items[0]);
+        // // free(buffer);
+        // FIFO_FREE(fifo);
+    }
+}
+
+/**
+ * @brief TBC
+ *
+ * @param argv NULL
+ */
+void *
+thread_build_sythetic_data(void *argv) {
+    FIFO *OUTPUT_FIFO = &(FIFO_POOL->stage_0);
+    uint64_t total_batch = 0;
+
+    while (1) {
+        input_batch *batch = FIFO_PUSH_RESERVE(input_batch, *OUTPUT_FIFO);
+        batch->valid = 1;
+
+        if (!(total_batch++ < NR_RUN)) {
+            batch->valid = 0;
+            FIFO_PUSH_RELEASE(*OUTPUT_FIFO);
+            break;
+        }
+        /* creates synthetic input batch of data */
+        build_synthetic_input_data(batch->indices, batch->offsets, batch->input_info, NR_EMBEDDING,
+                                   NR_BATCHES, INDEX_PER_BATCH, NR_ROWS, NR_COLS);
+
+        /* release input FIFO */
+        FIFO_PUSH_RELEASE(*OUTPUT_FIFO);
+    }
+
+    /* thread exit */
+    pthread_exit(NULL);
+    return NULL;
+}
+
+/**
+ * @brief TBC
+ *
+ * @param argv NULL
+ */
+void *
+thread_mege_results(void *argv) {
+    /* thread exit */
+    // pthread_exit(NULL);
+    return NULL;
+}
+/**
+ * @brief INIT_THREAD_POOL : initialize thread pool
+ * @param this thread pool pointer
+ */
+void
+INIT_THREAD_POOL(struct THREAD_POOL *this) {
+    /* index on current thread to of THREAD_POOL structure */
+    uint64_t thread_pool_index = 0;
+    pthread_create(&(this->th[thread_pool_index++]), NULL, thread_build_sythetic_data, NULL);
+    //    pthread_create(&(this->th[thread_pool_index++]), NULL, thread_mege_results, NULL);
+}
+
+/**
+ * @brief JOIN_THREAD_POOL : wait end of all thread in thread pool
+ * @param this thread pool pointer
+ */
+void
+JOIN_THREAD_POOL(struct THREAD_POOL *this) {
+    for (uint64_t i = 0; i < THREAD_POOL_NR_THREAD; i++)
+        pthread_join(this->th[i], NULL);
+}
+
 /** @brief synthetize embedding table, input indices and perform DPU embedding table */
 int
 main() {
 
     NR_DPUS = NR_COLS * NR_EMBEDDING;
 
+    FIFO_POOL = alloc_fifo_pool();
+
     /* alloc final results buffer */
     float **result_buffer = alloc_result_buffer(NR_EMBEDDING, NR_BATCHES, NR_COLS);
     int32_t ***dpu_result_buffer = alloc_dpu_result_buffer(NR_EMBEDDING, NR_BATCHES, NR_COLS);
-
-    uint32_t **indices = alloc_indices_buffer(NR_EMBEDDING, NR_BATCHES, INDEX_PER_BATCH);
-    uint32_t **offsets = alloc_offset_buffer(NR_EMBEDDING, NR_BATCHES, INDEX_PER_BATCH);
-    struct input_info *input_info = alloc_input_info(NR_EMBEDDING, NR_BATCHES, INDEX_PER_BATCH);
 
     printf("alloc dpus %lu \n", NR_DPUS);
     alloc_dpus(NR_DPUS);
@@ -318,19 +449,31 @@ main() {
     /* creates synthetic embedding parametes and transfet it to DPU MRAM */
     synthetic_populate(emb_tables, NR_ROWS, NR_COLS, NR_EMBEDDING);
 
-    /* creates synthetic input batch of data */
-    build_synthetic_input_data(indices, offsets, input_info, emb_tables, result_buffer,
-                               dpu_result_buffer, NR_EMBEDDING, NR_BATCHES, INDEX_PER_BATCH,
-                               NR_ROWS, NR_COLS);
-    /* perform inference */
-    synthetic_inference(indices, offsets, input_info, emb_tables, result_buffer, dpu_result_buffer,
-                        NR_EMBEDDING, NR_BATCHES, INDEX_PER_BATCH, NR_ROWS, NR_COLS);
+    INIT_THREAD_POOL(&THREAD_POOL);
 
-    free_indices_buffer(indices, NR_EMBEDDING);
-    free_offset_buffer(offsets, NR_EMBEDDING);
-    free_input_info(input_info);
+    FIFO *INPUT_FIFO = &(FIFO_POOL->stage_0);
+    while (1) {
+
+        /* get one mapped read batch */
+        input_batch *batch = FIFO_POP_RESERVE(input_batch, *INPUT_FIFO);
+
+        if (!batch->valid) {
+            FIFO_POP_RELEASE(*INPUT_FIFO);
+            break;
+        }
+
+        /* perform inference */
+        synthetic_inference(batch->indices, batch->offsets, batch->input_info, emb_tables,
+                            result_buffer, dpu_result_buffer, NR_EMBEDDING, NR_BATCHES,
+                            INDEX_PER_BATCH, NR_ROWS, NR_COLS);
+
+        FIFO_POP_RELEASE(*INPUT_FIFO);
+    }
+    JOIN_THREAD_POOL(&THREAD_POOL);
 
     free_result_buffer(result_buffer, NR_EMBEDDING);
     free_dpu_result_buffer(dpu_result_buffer, NR_COLS);
     free_emb_tables(emb_tables, NR_EMBEDDING);
+
+    free_fifo_pool(FIFO_POOL);
 }
