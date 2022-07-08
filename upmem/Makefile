@@ -15,7 +15,7 @@ build: build/emb build/embdpu
 
 build/emb: src/*.c include/*.h
 	mkdir -p build
-	gcc -O0 -g -Wall -msse4 -lm -lz -lpthread -I include \
+	gcc -O3 -g -Wall -msse4 -lm -lz -lpthread -I include \
 		-DNR_RUN=${NR_RUN} \
 		-DNR_TASKLETS=${NR_TASKLETS} \
 		-DMAX_INDEX_PER_BATCH=${MAX_INDEX_PER_BATCH} \

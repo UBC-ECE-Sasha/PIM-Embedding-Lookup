@@ -212,7 +212,7 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, struct input_info *i
                     uint64_t nr_embedding, uint64_t nr_batches, uint64_t indices_per_batch,
                     uint64_t nr_rows, uint64_t nr_cols) {
 
-    uint64_t multi_run = 1;
+    uint64_t multi_run = 10;
     struct timespec start, end, diff;
     double sum = 0;
     for (int i = 0; i < multi_run; i++) {
@@ -231,7 +231,7 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, struct input_info *i
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
     diff = time_diff(start, end);
 
-    printf("inference : average latency [ms]: %lf, OK ? %d \n", 1e-6 * sum / NR_RUN,
+    printf("inference : average latency [ms]: %lf, OK ? %d \n", 1e-6 * sum / multi_run,
            (int) valid);
     printf("verification took %lf ms\n", 1e-6 * (diff.tv_nsec +
            diff.tv_sec * 1e9));
