@@ -234,7 +234,7 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, struct input_info *i
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
     diff = time_diff(start, end);
 
-    printf("inference : average latency [ms]: %lf, OK ? %d \n", 1e-6 * sum / NR_RUN,
+    printf("inference : average latency [ms]: %lf, OK ? %d \n", 1e-6 * sum / multi_run,
            (int) valid);
     printf("verification took %lf ms\n", 1e-6 * (diff.tv_nsec +
            diff.tv_sec * 1e9));
