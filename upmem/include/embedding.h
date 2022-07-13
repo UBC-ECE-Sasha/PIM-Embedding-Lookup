@@ -70,9 +70,10 @@ typedef struct input_batch {
 typedef struct embeding_rank_mapping {
     uint32_t nr_ranks;
     uint32_t *rank_nr_dpus;
-    uint32_t *rank_nr_embedding;
-    uint32_t **embedding_index;
-    uint32_t **embedding_start_pos;
+    uint32_t *rank_nr_chunk;
+    uint32_t **chunk_embedding_index;
+    uint32_t **chunk_nr_col;
+    uint32_t **chunk_start_col;
 } embedding_rank_mapping;
 
 // static void
