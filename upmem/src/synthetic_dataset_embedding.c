@@ -220,25 +220,34 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, struct input_info *i
     struct timespec start, end, diff;
     double sum = 0;
     for (int i = 0; i < multi_run; i++) {
-        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
+        clock_gettime(CLOCK_REALTIME, &start);
+
         lookup(indices, offsets, input_info, rank_mapping_info, nr_embedding, nr_cols,
                result_buffer, dpu_result_buffer);
-        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
+        clock_gettime(CLOCK_REALTIME, &end);
+
         diff = time_diff(start, end);
         sum += diff.tv_nsec + diff.tv_sec * 1e9;
     }
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
+#if (CHECK_RESULTS == 1)
+    clock_gettime(CLOCK_REALTIME, &start);
     __attribute__((unused)) bool valid;
     valid =
         check_embedding_set_inference(emb_tables, nr_embedding, indices, offsets,
                                       input_info->indices_len, nr_batches, nr_cols, result_buffer);
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
+    clock_gettime(CLOCK_REALTIME, &end);
     diff = time_diff(start, end);
+    double cpu_time_ms = 1e-6 * (diff.tv_nsec + diff.tv_sec * 1e9);
+#endif
 
-    printf("inference : average latency [ms]: %lf, OK ? %d \n", 1e-6 * sum / multi_run,
-           (int) valid);
-    printf("verification took %lf ms\n", 1e-6 * (diff.tv_nsec +
-           diff.tv_sec * 1e9));
+    double dpu_time_ms = 1e-6 * sum / multi_run;
+
+#if (CHECK_RESULTS == 1)
+    printf("dpu [ms]: %lf, cpu [ms] %lf, dpu acceleration %lf, DPU OK ? %d \n", dpu_time_ms,
+           cpu_time_ms, cpu_time_ms / dpu_time_ms, (int) valid);
+#else
+    printf("dpu [ms]: %lf\n", dpu_time_ms);
+#endif
 }
 
 float **
