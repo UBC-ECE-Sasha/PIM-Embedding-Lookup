@@ -32,8 +32,7 @@ alloc_dpus(uint64_t nr_dpus) {
     printf("Alloc DPUs,  NR_RANKS %u\n", nr_ranks);
     struct dpu_set_t rank;
     uint32_t each_rank = 0;
-    uint64_t dpu_index = 0;
-    uint32_t nr_dpus_[20];
+    uint32_t nr_dpus_[1000];
     DPU_RANK_FOREACH(dpu_set, rank, each_rank) {
         DPU_ASSERT(dpu_get_nr_dpus(rank, &(nr_dpus_[each_rank])));
         printf("rank %u nr dpus %u\n", each_rank, nr_dpus_[each_rank]);
@@ -250,10 +249,11 @@ gather_rank_embedding_results(struct dpu_set_t rank, uint32_t rank_index, void *
     }
     return DPU_OK;
 }
+static uint32_t embedding_index[NR_DPUS];
 
 /** @brief perform DPU lookup operation in embedding set and for input indices of
  *        multiple batch
- *  @param indices array that stores indices [EMB_INDEX][BATCH_INDEX][INDEXES]
+ *  @param indices array that stores indices [EMB_INDEX][BATCH_INDEX * INDEXES]
  *  @param offsets array that stores indices offset (pytorch EmbedingBag convention)
  *  [EMB_INDEX][BATCH_INDEX][OFFSET]
  *  @param indices_len  gives the lenght of the input indices vector for each embedding [EMB_INDEX]
@@ -267,33 +267,49 @@ lookup(uint32_t **indices, uint32_t **offsets, struct input_info *input_info,
        float **result_buffer, int32_t ***dpu_result_buffer) {
 
     uint64_t dpu_index;
-    uint64_t embedding_id;
+    uint32_t embedding_id;
     struct dpu_set_t dpu;
     struct query_len lengths[nr_embedding];
 
-    // TODO: loop over embeddings
+
+    uint32_t max_nr_batches = 0;
+    uint32_t max_indices_len = 0;
+
+    for(uint64_t emb_index = 0 ; emb_index < nr_embedding; emb_index++)
+    {
+        if(max_indices_len < input_info->indices_len[emb_index])
+            max_indices_len = input_info->indices_len[emb_index];
+        
+        if(max_nr_batches < input_info->nr_batches_per_embedding[emb_index])
+            max_nr_batches =input_info->nr_batches_per_embedding[emb_index];
+    }
+ 
+    DPU_FOREACH(dpu_set, dpu, dpu_index) {
+         embedding_index[dpu_index] = (uint32_t)(dpu_index / nr_cols);
+         assert(embedding_index[dpu_index] < MAX_NR_EMBEDDING);
+    }
+
+   // TODO: loop over embeddings
     DPU_FOREACH(dpu_set, dpu, dpu_index) {
         // printf("dpu index %u, ind index %u\n", dpu_index, dpu_index / nr_cols);
-        DPU_ASSERT(dpu_prepare_xfer(dpu, indices[(int) (dpu_index / nr_cols)]));
+        DPU_ASSERT(dpu_prepare_xfer(dpu, indices[embedding_index[dpu_index]]));
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, "input_indices", 0,
-                             ALIGN(input_info->indices_len[0] * sizeof(uint32_t), 8),
+                             ALIGN(max_indices_len * sizeof(uint32_t), 8),
                              DPU_XFER_ASYNC));
 
     // TODO: loop over embeddings
     DPU_FOREACH(dpu_set, dpu, dpu_index) {
-        DPU_ASSERT(dpu_prepare_xfer(dpu, offsets[(int) (dpu_index / nr_cols)]));
+        DPU_ASSERT(dpu_prepare_xfer(dpu, offsets[embedding_index[dpu_index]]));
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, "input_offsets", 0,
-                             ALIGN(input_info->nr_batches_per_embedding[0] * sizeof(uint32_t), 8),
+                             ALIGN(max_nr_batches * sizeof(uint32_t), 8),
                              DPU_XFER_ASYNC));
 
     DPU_FOREACH(dpu_set, dpu, dpu_index) {
-        embedding_id = (int) (dpu_index / nr_cols);
+        embedding_id = embedding_index[dpu_index];
         // TODO : this functions support same batch size for each embedding, but
-        assert(input_info->nr_batches_per_embedding[embedding_id] ==
-               input_info->nr_batches_per_embedding[0]);
-        lengths[embedding_id].indices_len = input_info->indices_len[0];
+        lengths[embedding_id].indices_len = input_info->indices_len[embedding_id];
         lengths[embedding_id].nr_batches = input_info->nr_batches_per_embedding[embedding_id];
         DPU_ASSERT(dpu_prepare_xfer(dpu, &lengths[embedding_id]));
     }
@@ -304,15 +320,12 @@ lookup(uint32_t **indices, uint32_t **offsets, struct input_info *input_info,
     DPU_ASSERT(dpu_launch(dpu_set, DPU_ASYNCHRONOUS));
 
     DPU_FOREACH(dpu_set, dpu, dpu_index) {
-        embedding_id = dpu_index / nr_cols;
+        embedding_id = embedding_index[dpu_index];
         uint64_t dpu_mod_index = dpu_index % nr_cols;
-        // printf("  dpu_mod_index %lu\n", dpu_mod_index);
-        assert(input_info->nr_batches_per_embedding[embedding_id] ==
-               input_info->nr_batches_per_embedding[0]);
         DPU_ASSERT(dpu_prepare_xfer(dpu, dpu_result_buffer[embedding_id][dpu_mod_index]));
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_FROM_DPU, "results", 0,
-                             ALIGN(sizeof(int32_t) * input_info->nr_batches_per_embedding[0], 8),
+                             ALIGN(sizeof(int32_t) * max_nr_batches, 8),
                              DPU_XFER_ASYNC));
 
     callback_data->nr_cols = nr_cols;

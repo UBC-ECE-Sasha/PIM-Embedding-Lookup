@@ -10,7 +10,6 @@
 #include <stdlib.h>
 #include <time.h>
 
-static uint64_t NR_DPUS;
 struct FIFO_POOL *FIFO_POOL;
 
 /** @brief compute time difference from to timespec */
@@ -149,7 +148,7 @@ free_indices_buffer(uint32_t **indices, uint64_t nr_embedding) {
 }
 
 uint32_t **
-alloc_offset_buffer(uint64_t nr_embedding, uint64_t nr_batches, uint64_t indices_per_batch) {
+alloc_offset_buffer(uint64_t nr_embedding, uint64_t nr_batches) {
     uint32_t **offsets = (uint32_t **) malloc(nr_embedding * sizeof(uint32_t *));
     for (uint32_t k = 0; k < nr_embedding; k++) {
         offsets[k] = (uint32_t *) malloc(nr_batches * sizeof(uint32_t));
@@ -180,20 +179,54 @@ free_input_info(struct input_info *info) {
 }
 
 void
+build_synthetic_input_size(struct input_info *input_info, uint32_t ** indices_per_batch,
+                           uint64_t nr_embedding, uint64_t nr_batches, uint64_t nr_rows)
+{
+    uint32_t index_per_batch;
+    // creates synthetic input batch of indices
+    for (uint64_t embedding_index = 0; embedding_index < nr_embedding; embedding_index++) {
+
+        input_info->nr_batches_per_embedding[embedding_index] = nr_batches;
+        input_info->indices_len[embedding_index] = 0;
+        for (uint64_t batch_index = 0; batch_index < nr_batches; batch_index++) {
+#if (RAND_INPUT_SIZE == 1)
+            double index_per_batch_norm = ((double) rand() / RAND_MAX);
+            index_per_batch = (uint32_t) (index_per_batch_norm * MAX_INDEX_PER_BATCH_RAND);
+#else
+            index_per_batch =  INDEX_PER_BATCH;
+#endif
+            indices_per_batch[embedding_index][batch_index] = index_per_batch;
+            input_info->indices_len[embedding_index] += index_per_batch ;
+            // printf("indices_per_batch %u\n", index_per_batch);
+        }
+    }
+}
+
+void
 build_synthetic_input_data(uint32_t **indices, uint32_t **offsets, struct input_info *input_info,
-                           uint64_t nr_embedding, uint64_t nr_batches, uint64_t indices_per_batch,
+                           uint64_t nr_embedding, uint64_t nr_batches, uint32_t **indices_per_batch,
                            uint64_t nr_rows, uint64_t nr_cols) {
+
+    
+
 
     // creates synthetic input batch of indices
     for (uint64_t k = 0; k < nr_embedding; k++) {
-        input_info->indices_len[k] = nr_batches * indices_per_batch;
         input_info->nr_batches_per_embedding[k] = nr_batches;
-        for (uint64_t i = 0; i < nr_batches; i++) {
-            offsets[k][i] = i * indices_per_batch;
-            for (uint64_t j = 0; j < indices_per_batch; j++) {
+        input_info->indices_len[k] = 0;
+        for(uint64_t batch_index = 0 ; batch_index < nr_batches; batch_index++)
+            input_info->indices_len[k] += indices_per_batch[k][batch_index];
+        
+        offsets[k][0] = 0;
+        for(uint64_t batch_index = 1 ; batch_index < nr_batches; batch_index++)
+            offsets[k][batch_index] = offsets[k][batch_index -1 ] +  indices_per_batch[k][batch_index -1];
+
+        for (uint64_t batch_index = 0; batch_index < input_info->nr_batches_per_embedding[k] ; batch_index++) {
+            for (uint64_t j = 0; j < indices_per_batch[k][batch_index]; j++) {
                 double index_norm = ((double) rand() / RAND_MAX);
                 uint64_t index = (uint64_t) (nr_rows * index_norm);
-                indices[k][i * indices_per_batch + j] = index;
+                // printf("%u\n",index);
+                indices[k][offsets[k][batch_index] + j] = index;
                 assert(index < nr_rows);
             }
         }
@@ -337,8 +370,8 @@ alloc_fifo_pool() {
         for (uint64_t i = 0; i < STAGE_0_DEPTH; i++) {
             struct input_info *input_info =
                 alloc_input_info(NR_EMBEDDING, NR_BATCHES, INDEX_PER_BATCH);
-            uint32_t **indices = alloc_indices_buffer(NR_EMBEDDING, NR_BATCHES, INDEX_PER_BATCH);
-            uint32_t **offsets = alloc_offset_buffer(NR_EMBEDDING, NR_BATCHES, INDEX_PER_BATCH);
+            uint32_t **indices = alloc_indices_buffer(NR_EMBEDDING, NR_BATCHES, MAX_INDEX_PER_BATCH);
+            uint32_t **offsets = alloc_offset_buffer(NR_EMBEDDING, NR_BATCHES);
             batch[i].indices = indices;
             batch[i].offsets = offsets;
             batch[i].input_info = input_info;
@@ -388,6 +421,12 @@ thread_build_sythetic_data(void *argv) {
     FIFO *OUTPUT_FIFO = &(FIFO_POOL->stage_0);
     uint64_t total_batch = 0;
 
+    uint32_t ** indices_per_batch;
+    indices_per_batch = malloc( MAX_NR_EMBEDDING * sizeof(uint32_t*));
+    for(uint64_t batch_index = 0 ; batch_index<MAX_NR_BATCHES; batch_index++) 
+      indices_per_batch[batch_index] = malloc( MAX_NR_BATCHES  * sizeof(uint32_t)) ;
+
+
     while (1) {
         input_batch *batch = FIFO_PUSH_RESERVE(input_batch, *OUTPUT_FIFO);
         batch->valid = 1;
@@ -397,13 +436,20 @@ thread_build_sythetic_data(void *argv) {
             FIFO_PUSH_RELEASE(*OUTPUT_FIFO);
             break;
         }
+
+        /* creates synthetic input batch of data */
+        build_synthetic_input_size(batch->input_info, indices_per_batch, NR_EMBEDDING, NR_BATCHES, NR_ROWS);
         /* creates synthetic input batch of data */
         build_synthetic_input_data(batch->indices, batch->offsets, batch->input_info, NR_EMBEDDING,
-                                   NR_BATCHES, INDEX_PER_BATCH, NR_ROWS, NR_COLS);
+                                   NR_BATCHES, indices_per_batch, NR_ROWS, NR_COLS);
 
         /* release input FIFO */
         FIFO_PUSH_RELEASE(*OUTPUT_FIFO);
     }
+
+    for(uint64_t batch_index = 0 ; batch_index<MAX_NR_BATCHES; batch_index++) 
+      free(indices_per_batch[batch_index]);
+    free(indices_per_batch );
 
     /* thread exit */
     pthread_exit(NULL);
@@ -446,8 +492,6 @@ JOIN_THREAD_POOL(struct THREAD_POOL *this) {
 /** @brief synthetize embedding table, input indices and perform DPU embedding table */
 int
 main() {
-
-    NR_DPUS = NR_COLS * NR_EMBEDDING;
 
     FIFO_POOL = alloc_fifo_pool();
     alloc_embedding_dpu_backend();

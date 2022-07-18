@@ -13,6 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#define NR_DPUS (NR_COLS * NR_EMBEDDING)
 #define TIME_NOW(_t) (clock_gettime(CLOCK_MONOTONIC, (_t)))
 
 /**

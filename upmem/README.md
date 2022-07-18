@@ -1,3 +1,6 @@
+cloud7 index 128, sans les -g
+BUGGY
+
 # PIM
 
 ## Building
