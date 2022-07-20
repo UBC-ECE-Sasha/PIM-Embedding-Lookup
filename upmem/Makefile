@@ -1,27 +1,29 @@
 .PHONY:all
 
-
-MAX_NR_EMBEDDING=100
-MAX_INDEX_PER_BATCH=128
-MAX_NR_BATCHES=64
+MAX_NR_DPUS=10000
+MAX_NR_EMBEDDING=2000
+MAX_INDEX_PER_BATCH=160
+MAX_NR_BATCHES=60
 NR_COLS=64
 NR_BATCHES=32
-NR_RUN=100
-INDEX_PER_BATCH=128
-MAX_INDEX_PER_BATCH_RAND=100
-NR_ROWS=14000000
-NR_EMBEDDING=30
+NR_RUN=1
+INDEX_PER_BATCH=120
+MAX_INDEX_PER_BATCH_RAND=160
+NR_ROWS=500000
+NR_EMBEDDING=730
 NR_TASKLETS=16
 CHECK_RESULTS=1
 RAND_INPUT_SIZE=0
+
 
 build: build/emb build/embdpu
 
 build/emb: src/*.c include/*.h
 	mkdir -p build
-	gcc -O3   -Wall -mavx -msse4 -lm -lz -lpthread -I include \
+	gcc -O3     -Wall -mavx -msse4 -lm -lz -lpthread -I include \
 		-DNR_RUN=${NR_RUN} \
 		-DCHECK_RESULTS=${CHECK_RESULTS} \
+		-DMAX_NR_DPUS=${MAX_NR_DPUS} \
 		-DRAND_INPUT_SIZE=${RAND_INPUT_SIZE} \
 		-DMAX_INDEX_PER_BATCH_RAND=${MAX_INDEX_PER_BATCH_RAND} \
 		-DNR_TASKLETS=${NR_TASKLETS} \
@@ -38,9 +40,10 @@ build/emb: src/*.c include/*.h
 build/embdpu: src/dpu/*.c 
 	mkdir -p build
 	# TODO : why flto fails
-	dpu-clang -O3 -flto=thin -I include \
+	dpu-clang -O3  -flto=thin -I include \
 		-DNR_RUN=${NR_RUN} \
 		-DNR_TASKLETS=${NR_TASKLETS} \
+		-DMAX_NR_DPUS=${MAX_NR_DPUS} \
 		-DRAND_INPUT_SIZE=${RAND_INPUT_SIZE} \
 		-DMAX_INDEX_PER_BATCH=${MAX_INDEX_PER_BATCH} \
 		-DMAX_NR_EMBEDDING=${MAX_NR_EMBEDDING} \
