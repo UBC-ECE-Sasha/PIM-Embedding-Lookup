@@ -22,6 +22,8 @@
 #    define DPU_BINARY "/home/upmem0016/niloo/new_project/PIM-Embedding-Lookup/upmem/build/release/dpu/emb_dpu_lookup" // Relative path regarding the PyTorch code
 #endif
 
+
+
 int32_t* buffer_data[NR_COLS];
 bool first_run=true;
 struct dpu_set_t *dpu_set;
@@ -200,6 +202,9 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
                 uint32_t* nr_batches, float** final_results, void *dpu_set_ptr_untyped
                 //,dpu_runtime_group *runtime_group
                 ){
+    // // Check env
+    // printf("C test: Check envs: NR_COLS=%d, NR_TABLES=%d, MAX_NR_BATCHES=%d, NR_TASKLETS=%d", NR_COLS, NR_TABLES, MAX_NR_BATCHES, NR_TASKLETS);
+
     //printf("starting lookup\n");
     struct dpu_set_t *dpu_set_ptr = (struct dpu_set_t *) dpu_set_ptr_untyped;
     //struct timespec start, end;

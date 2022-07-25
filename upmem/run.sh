@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
@@ -38,8 +38,9 @@ kaggle_env() {
     export NR_TASKLETS=14
 }
 
+build_pytorch=true
 random_env() {
-    export NR_TABLES=9
+    export NR_TABLES=10
     export NR_COLS=64
     export MAX_NR_BATCHES=64
     export NR_TASKLETS=14
@@ -84,6 +85,16 @@ kaggle_run() {
 }
 
 random_run() {
+    echo "Check env: NR_TABLES = ${NR_TABLES}, NR_COLS = ${NR_COLS}"
+    if "${build_pytorch}"; then
+        cd ${cwd}/../PIM-Pytorch
+        # NR_TABLES=${NR_TABLES} NR_COLS=${NR_COLS} MAX_NR_BATCHES=${MAX_NR_BATCHES} NR_TASKLETS=${NR_TASKLETS} REL_WITH_DEB_INFO=1 DEBUG=1 USE_DISTRIBUTED=1 USE_MKLDNN=0 USE_CUDA=0 BUILD_TEST=0 USE_NNPACK=0 USE_QNNPACK=0 USE_XNNPACK=0 BUILD_CAFFE2=1 python3 "${cwd}/../PIM-Pytorch/setup.py" develop
+        python3 setup.py clean
+        REL_WITH_DEB_INFO=1 DEBUG=1 USE_DISTRIBUTED=1 USE_MKLDNN=0 USE_CUDA=0 BUILD_TEST=0 USE_NNPACK=0 USE_QNNPACK=0 USE_XNNPACK=0 BUILD_CAFFE2=1 python3 "${cwd}/../PIM-Pytorch/setup.py" develop
+    else
+        echo "skipping pytorch build"
+    fi
+    cd "${cwd}/${build_dir}"
     python3 "${cwd}/../PIM-dlrm-new/dlrm_dpu_pytorch.py" \
            --arch-embedding-size=65000-65000-65000-65000-65000-65000-65000-65000-65000 \
            --arch-sparse-feature-size=64 \
