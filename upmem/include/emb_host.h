@@ -271,5 +271,13 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
             &runtime_group->intervals[runtime_group[table_id].in_use], &start, &end);
             runtime_group[table_id].in_use++;
     } */
+    /* free(callback_data);
+    for(int i=0; i<NR_TABLES; i++){
+        for(int j=0; j<NR_COLS; j++){
+            free(tmp_results[i][j]);
+        }
+        free(tmp_results[i]);
+    }
+    free(tmp_results); */
     return 0;
 }

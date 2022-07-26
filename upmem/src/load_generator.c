@@ -92,7 +92,7 @@ float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t in
 		}
 	}
 
-	printf("DEBUG: synthetic_inference() - Done loading synthetic data.\n");
+	//printf("DEBUG: synthetic_inference() - Done loading synthetic data.\n");
 	struct timespec start, end, latency;
 	int sum=0;
 	for(int i=0; i<100; i++){
@@ -103,7 +103,7 @@ float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t in
 		sum+=time_diff(start, end).tv_nsec;
 	}
 
-	printf("median latency:%d\n", sum/100);
+	//printf("median latency:%d\n", sum/100);
 
 	/* bool valid=validate_result(emb_tables, nr_tables, synthetic_indices, synthetic_offsets, 
 		synthetic_indices_len, nr_batches, nr_cols, final_results);
@@ -111,7 +111,7 @@ float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t in
 	printf(valid ? "true\n" : "false\n"); */
 
 
-	printf("DEBUG: synthetic_inference() - Done lookup.\n");
+	//printf("DEBUG: synthetic_inference() - Done lookup.\n");
 	for (int k=0; k<nr_tables; k++){
 		free(synthetic_indices[k]);
 		free(synthetic_offsets[k]);
@@ -123,19 +123,17 @@ float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t in
 }
 
 int main(){
-	/* NR_COLS   			= 64
-	 * NR_ROWS  		 	= 50000
-	 * NR_TABLES			= 1
-	 * NR_BATCHES 			= 64
-	 * indices_per_batch 	= 32
-	*/
+	uint32_t NR_ROWS= 50000;
+	uint32_t NR_BATCHES= 128;
+	uint32_t INDICES_PER_BATCH= 32;
 
-	printf("DEBUG: Starting synthetic_populate()...\n");
-	synthetic_populate(50000,64,9);
+	//printf("DEBUG: Starting synthetic_populate()...\n");
+	synthetic_populate(NR_ROWS,NR_COLS,NR_TABLES);
 
-	printf("DEBUG: Done synthetic_populate(), starting synthetic_inference()...\n");
-	float** results=synthetic_inference(9,64,32,50000,64);
-	printf("DEBUG: Done synthetic_inference().\n");
+	//printf("DEBUG: Done synthetic_populate(), starting synthetic_inference()...\n");
+	float** results=synthetic_inference(NR_TABLES,NR_BATCHES,INDICES_PER_BATCH,
+		NR_ROWS,NR_COLS);
+	//printf("DEBUG: Done synthetic_inference().\n");
 
 }
 

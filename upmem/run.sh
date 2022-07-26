@@ -39,9 +39,9 @@ kaggle_env() {
 }
 
 random_env() {
-    export NR_TABLES=9
+    export NR_TABLES=3
     export NR_COLS=64
-    export MAX_NR_BATCHES=64
+    export MAX_NR_BATCHES=32
     export NR_TASKLETS=14
 }
 
@@ -53,12 +53,12 @@ random_env() {
 #     export NR_TASKLETS=1
 # }
 toy_env() {
-    export NR_TABLES=9
-    export NR_COLS=64
+    export NR_TABLES=5
+    export NR_COLS=32
     export NR_BATCHES=64
     export DPU_TEST=1
-    export MAX_NR_BATCHES=64
-    export NR_TASKLETS=10
+    export MAX_NR_BATCHES=128
+    export NR_TASKLETS=14
     # rows?
 }
 
@@ -85,12 +85,12 @@ kaggle_run() {
 
 random_run() {
     python3 "${cwd}/../PIM-dlrm-new/dlrm_dpu_pytorch.py" \
-           --arch-embedding-size=65000-65000-65000-65000-65000-65000-65000-65000-65000 \
+           --arch-embedding-size=65000-65000-65000 \
            --arch-sparse-feature-size=64 \
            --arch-mlp-bot=1440-720-64 \
            --arch-mlp-top=40-20-10-1 \
            --data-generation=random \
-           --mini-batch-size=64 \
+           --mini-batch-size=32 \
            --num-batches=100 \
            --num-indices-per-lookup=32 \
            --num-indices-per-lookup-fixed=True \
