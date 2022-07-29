@@ -12,24 +12,10 @@
 
 struct FIFO_POOL *FIFO_POOL;
 
-/** @brief compute time difference from to timespec */
-struct timespec
-time_diff(struct timespec start, struct timespec end) {
-    struct timespec temp;
-    if ((end.tv_nsec - start.tv_nsec) < 0) {
-        temp.tv_sec = end.tv_sec - start.tv_sec - 1;
-        temp.tv_nsec = 1000000000 + end.tv_nsec - start.tv_nsec;
-    } else {
-        temp.tv_sec = end.tv_sec - start.tv_sec;
-        temp.tv_nsec = end.tv_nsec - start.tv_nsec;
-    }
-    return temp;
-}
-
-/** @brief computes synthetic embedding tables and store it to DPU MRAM
- *  @param nr_rows Embedding Number of rows (same for each embedding)
- *  @param nr_cols Embedding Number of columns (same for each embedding)
- *  @param nr_embedding number of embedding in emb_tables
+/**
+ *  @brief alloc synthetic embedding tables on HCPU side
+ *  @param embedding_info information about embedding configuration
+ *  @return allocated embedding tables
  */
 int32_t **
 alloc_emb_tables(embedding_info *emb_info) {
@@ -43,6 +29,11 @@ alloc_emb_tables(embedding_info *emb_info) {
     return emb_tables;
 }
 
+/**
+ *  @brief free embedding tables on HCPU side
+ *  @param emb_tables embedding tables
+ *  @param embedding_info information about embedding configuration
+ */
 void
 free_emb_tables(int32_t **emb_tables, embedding_info *emb_info) {
     for (uint64_t embedding_index = 0; embedding_index < emb_info->nr_embedding;
@@ -52,8 +43,17 @@ free_emb_tables(int32_t **emb_tables, embedding_info *emb_info) {
     }
     free(emb_tables);
 }
-
+/** @brief type of data generation */
 enum emb_datagen { RAND, CPT, ZERO, NONE };
+
+/**
+ *  @brief populate embedding table with synthetic data
+ *  @param rank_mapping information about rank embedding mapping
+ *  @param emb_info information about embedding configuration
+ *  @param emb_tables embedding tables
+ */
+static int32_t cpt = 0;
+static int32_t sign = 1;
 void
 synthetic_populate(embedding_rank_mapping *rank_mapping, embedding_info *emb_info,
                    int32_t **emb_tables) {
@@ -64,25 +64,29 @@ synthetic_populate(embedding_rank_mapping *rank_mapping, embedding_info *emb_inf
     if (emb_data_type == RAND) {
         for (uint64_t embedding_index = 0; embedding_index < emb_info->nr_embedding;
              embedding_index++) {
-            /* synthetize embedding table parameters */
+            /* synthetize random embedding table parameters */
             for (int i = 0; i < emb_info->nr_rows * emb_info->nr_cols; i++) {
                 double data_norm = (double) (rand()) / ((double) RAND_MAX + 1) / INDEX_PER_BATCH;
                 emb_tables[embedding_index][i] = (int32_t) (INT32_MAX * data_norm);
             }
         }
     } else if (emb_data_type == CPT) {
-
+        uint64_t cpt = 0;
         for (uint64_t embedding_index = 0; embedding_index < emb_info->nr_embedding;
              embedding_index++) {
-            /* synthetize embedding table parameters */
             for (int i = 0; i < emb_info->nr_rows * emb_info->nr_cols; i++) {
-                emb_tables[embedding_index][i] = (int32_t) (embedding_index + i);
+                emb_tables[embedding_index][i] = cpt * sign;
+                cpt++;
+                if ((float) (cpt) > (float) INT32_MAX / INDEX_PER_BATCH)
+                    cpt = 0;
+                //     printf("cpt %d\n", emb_tables[embedding_index][i]);
+
+                sign = sign * -1;
             }
         }
     } else if (emb_data_type == ZERO) {
         for (uint64_t embedding_index = 0; embedding_index < emb_info->nr_embedding;
              embedding_index++) {
-            /* synthetize embedding table parameters */
             for (int i = 0; i < emb_info->nr_rows * emb_info->nr_cols; i++) {
                 emb_tables[embedding_index][i] = (int32_t) (0);
             }
@@ -90,28 +94,40 @@ synthetic_populate(embedding_rank_mapping *rank_mapping, embedding_info *emb_inf
     }
 
     printf("populate mram with embedding synthetic tables\n");
+
     /* store one embedding to DPU MRAM */
     populate_mram(rank_mapping, emb_info, emb_tables);
 }
 
+/**
+ *   @brief check_one_embedding_set_inference
+ *   @param embedding_index_start  start index in embedding array
+ *   @param emb_valid output indicates if DPU results is valid for the current embedding
+ *   @param emb_tables embedding tables
+ *   @param indices embedding input indices
+ *   @param offsets embedding input offset
+ *   @param indices_len embedding input lendgth
+ *   @param nr_batches number of batches for input
+ *   @param nr_cols embedding number of cols
+ *   @param results embedding DPU results
+ *   @param nr_embedding number of embedding
+ */
 void
-check_one_embedding_set_inference(uint64_t embedding_index_, uint64_t *emb_valid,
-                                  int32_t **emb_tables, uint32_t **indices, uint32_t **offsets,
-                                  uint64_t *indices_len, uint64_t nr_batches, uint64_t nr_cols,
-                                  float **results, uint64_t nr_embedding) {
+cpu_embedding_lookup(uint64_t embedding_index_start, int32_t **emb_tables, uint32_t **indices,
+                     uint32_t **offsets, uint64_t *indices_len, uint64_t nr_batches,
+                     uint64_t nr_cols, float ***cpu_results, uint64_t nr_embedding) {
 
-    int32_t tmp_result[nr_cols];
     uint64_t index = 0;
 
-    for (uint64_t embedding_index = embedding_index_;
-         embedding_index < nr_embedding + embedding_index_; embedding_index++) {
-        bool valid = true;
-        /* for each embedding */
+    /* for each embedding */
+    for (uint64_t embedding_index = embedding_index_start;
+         embedding_index < nr_embedding + embedding_index_start; embedding_index++) {
         /* for each input batch of index */
         for (int batch_index = 0; batch_index < nr_batches; batch_index++) {
             /* reset tmb buffer */
             for (int col_index = 0; col_index < nr_cols; col_index++)
-                tmp_result[col_index] = 0;
+                cpu_results[embedding_index][batch_index][col_index] = 0;
+
             /* check limits */
             uint64_t upper_bound = batch_index == nr_batches - 1 ?
                                        indices_len[embedding_index] :
@@ -122,50 +138,36 @@ check_one_embedding_set_inference(uint64_t embedding_index_, uint64_t *emb_valid
                 index = indices[embedding_index][ind_ptr];
                 for (int col_index = 0; col_index < nr_cols; col_index++) {
                     /*Embedding reduction mode : ADD */
-                    tmp_result[col_index] +=
+                    cpu_results[embedding_index][batch_index][col_index] +=
                         emb_tables[embedding_index][index * nr_cols + col_index];
                 }
             }
-            /* ckeck the batch result */
-            for (int col_index = 0; col_index < nr_cols; col_index++) {
-
-                float dpu_result = results[embedding_index][batch_index * nr_cols + col_index];
-                float host_result = tmp_result[col_index];
-                __attribute__((unused)) float diff;
-                diff = fabs(dpu_result * pow(10, 9) - host_result);
-                if (diff > 1000)
-                    printf("[%lu][%d][%d] diff: %f\tdpu_result: %f\thost_result: %f\n",
-                           embedding_index, batch_index, col_index, diff, dpu_result * pow(10, 9),
-                           host_result);
-                /* check magnitude with arbitrary threshold */
-                if (diff > 1000)
-                    valid = false;
-            }
         }
-        emb_valid[embedding_index] = valid;
     }
 }
 
 typedef struct {
     uint64_t embdedding_index;
-    uint64_t *emb_valid;
     int32_t **emb_tables;
     uint32_t **indices;
     uint32_t **offsets;
     uint64_t *indices_len;
     uint64_t nr_batches;
     uint64_t nr_cols;
-    float **results;
     uint64_t nr_embedding;
+    float ***cpu_results;
 } param_map_t;
 
+/**
+ *   @brief thread function that call kernel function to check dpu results
+ *   @param argv thread args
+ */
 void *
-thread_map_emb_check(void *argv) {
+thread_cpu_embedding_lookup(void *argv) {
     param_map_t *param = (param_map_t *) argv;
-    check_one_embedding_set_inference(param->embdedding_index, param->emb_valid, param->emb_tables,
-                                      param->indices, param->offsets, param->indices_len,
-                                      param->nr_batches, param->nr_cols, param->results,
-                                      param->nr_embedding);
+    cpu_embedding_lookup(param->embdedding_index, param->emb_tables, param->indices, param->offsets,
+                         param->indices_len, param->nr_batches, param->nr_cols, param->cpu_results,
+                         param->nr_embedding);
 
     pthread_exit(NULL);
 }
@@ -184,12 +186,11 @@ pthread_t THREAD_MAP[MAX_NR_EMBEDDING];
  *  @param results DPU embedding inference result buffer [EMB_INDEX][BATCH_INDEX * NR_COLS]
  *  @return host model result and DPU results are the same or not
  */
-bool
-check_embedding_set_inference(uint64_t nr_thread, int32_t **emb_tables, uint64_t nr_embedding,
-                              uint32_t **indices, uint32_t **offsets, uint64_t *indices_len,
-                              uint64_t nr_batches, uint64_t nr_cols, float **results) {
+void
+cpu_lookup(uint64_t nr_thread, int32_t **emb_tables, uint64_t nr_embedding, uint32_t **indices,
+           uint32_t **offsets, uint64_t *indices_len, uint64_t nr_batches, uint64_t nr_cols,
+           float ***cpu_results, int32_t *ret) {
 
-    uint64_t *emb_valid = malloc(nr_embedding * sizeof(uint64_t));
 #define CPU_MT 1
 #if (CPU_MT == 1)
     param_map_t **param = malloc(sizeof(param_map_t *) * nr_embedding);
@@ -200,7 +201,6 @@ check_embedding_set_inference(uint64_t nr_thread, int32_t **emb_tables, uint64_t
     for (uint64_t embdedding_index = 0, emb_lot_index = 0; emb_lot_index < nr_thread;
          embdedding_index += emb_lot, emb_lot_index++) {
 
-        param[emb_lot_index]->emb_valid = emb_valid;
         param[emb_lot_index]->embdedding_index = embdedding_index;
         param[emb_lot_index]->emb_tables = emb_tables;
         param[emb_lot_index]->indices = indices;
@@ -208,10 +208,10 @@ check_embedding_set_inference(uint64_t nr_thread, int32_t **emb_tables, uint64_t
         param[emb_lot_index]->indices_len = indices_len;
         param[emb_lot_index]->nr_batches = nr_batches;
         param[emb_lot_index]->nr_cols = nr_cols;
-        param[emb_lot_index]->results = results;
         param[emb_lot_index]->nr_embedding = emb_lot;
+        param[emb_lot_index]->cpu_results = cpu_results;
 
-        pthread_create(&THREAD_MAP[emb_lot_index], NULL, thread_map_emb_check,
+        pthread_create(&THREAD_MAP[emb_lot_index], NULL, thread_cpu_embedding_lookup,
                        param[emb_lot_index]);
     }
 
@@ -245,14 +245,6 @@ check_embedding_set_inference(uint64_t nr_thread, int32_t **emb_tables, uint64_t
     free(param);
 
 #endif
-    bool valid = true;
-    for (uint64_t embdedding_index = 0; embdedding_index < nr_embedding; embdedding_index++) {
-        // printf("vazlid %u\n", emb_valid[embdedding_index]);
-        valid = valid && emb_valid[embdedding_index];
-    }
-    free(emb_valid);
-
-    return valid;
 }
 
 uint32_t **
@@ -378,14 +370,15 @@ build_synthetic_input_data(uint32_t **indices, uint32_t **offsets, struct input_
 void
 synthetic_inference(uint32_t **indices, uint32_t **offsets, input_info *input_info,
                     embedding_rank_mapping *rank_mapping_info, int32_t **emb_tables,
-                    float **result_buffer, int32_t **dpu_result_buffer, embedding_info *emb_info) {
+                    float ***cpu_results, float **result_buffer, int32_t **dpu_result_buffer,
+                    embedding_info *emb_info) {
 
+    __attribute__((unused)) bool valid = true;
     uint64_t nr_embedding = emb_info->nr_embedding;
     uint64_t nr_batches = input_info->nr_batches;
     uint64_t nr_rows = emb_info->nr_rows;
     uint64_t nr_cols = emb_info->nr_cols;
     double cpu_p_ratio = 0, dpu_p_ratio = 0;
-    __attribute__((unused)) bool valid;
     double cpu_time = 0, dpu_time = 0;
     uint64_t multi_run = 20;
     for (int i = 0; i < multi_run; i++) {
@@ -416,7 +409,10 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, input_info *input_in
         dpu_p_ratio += process_time / time * 100.0;
         dpu_time += time;
     }
-#if (CHECK_RESULTS == 1)
+    double dpu_time_ms = dpu_time / multi_run;
+
+    int32_t ret[NR_COLS];
+
     {
         uint64_t cpu_nr_thread = CPU_NR_THREAD_MAX;
         if (cpu_nr_thread > nr_embedding)
@@ -431,9 +427,8 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, input_info *input_in
             clock_gettime(CLOCK_MONOTONIC_RAW, &start_time);
             clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_process_time);
 
-            valid = check_embedding_set_inference(cpu_nr_thread, emb_tables, nr_embedding, indices,
-                                                  offsets, input_info->indices_len, nr_batches,
-                                                  nr_cols, result_buffer);
+            cpu_lookup(cpu_nr_thread, emb_tables, nr_embedding, indices, offsets,
+                       input_info->indices_len, nr_batches, nr_cols, cpu_results, ret);
             clock_gettime(CLOCK_MONOTONIC_RAW, &stop_time);
             clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &stop_process_time);
             double time = (float) ((stop_time.tv_sec - start_time.tv_sec) * 1e9 +
@@ -450,22 +445,80 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, input_info *input_in
 
             cpu_p_ratio += process_time / time * 100.0;
             cpu_time += time;
-        }
-    }
-#endif
+#define CHECK_RESULTS 1
+#if (CHECK_RESULTS == 1)
+            {
 
-    double dpu_time_ms = dpu_time / multi_run;
-    double cpu_time_ms = cpu_time / multi_run;
+                /* for each embedding */
+                for (uint64_t embedding_index = 0; embedding_index < nr_embedding;
+                     embedding_index++) {
+                    /* for each input batch of index */
+                    for (int batch_index = 0; batch_index < nr_batches; batch_index++) {
+
+                        for (int col_index = 0; col_index < nr_cols; col_index++) {
+
+                            float dpu_result =
+                                result_buffer[embedding_index][batch_index * nr_cols + col_index];
+                            float host_result =
+                                cpu_results[embedding_index][batch_index][col_index];
+
+                            __attribute__((unused)) float diff;
+
+                            diff = fabs(dpu_result * pow(10, 9) - host_result);
+                            if (diff > 2000)
+                                printf("[%lu][%d][%d] diff: %f\tdpu_result: %f\thost_result: %f\n",
+                                       embedding_index, batch_index, col_index, diff,
+                                       dpu_result * pow(10, 9), host_result);
+
+                            /* check magnitude with arbitrary threshold */
+                            if (diff > 2000)
+                                valid = false;
+                        }
+                    }
+                }
+            }
+#endif
+        }
+        double cpu_time_ms = cpu_time / multi_run;
 
 #if (CHECK_RESULTS == 1)
 
-    printf("dpu [ms]: %lf, cpu [ms] %lf, dpu acceleration %lf\n DPU PRATIO %f, CPU PRATIO %f, DPU "
-           "OK ? %d \n",
-           dpu_time_ms, cpu_time_ms, cpu_time_ms / dpu_time_ms, dpu_p_ratio / multi_run,
-           cpu_p_ratio / multi_run, (int) valid);
+        printf("dpu [ms]: %lf, cpu [ms] %lf, dpu acceleration %lf\n DPU PRATIO %f, CPU PRATIO "
+               "%f, DPU "
+               "OK ? %d \n",
+               dpu_time_ms, cpu_time_ms, cpu_time_ms / dpu_time_ms, dpu_p_ratio / multi_run,
+               cpu_p_ratio / multi_run, (int) valid);
 #else
-    printf("dpu [ms]: %lf\n", dpu_time_ms);
+        printf("dpu [ms]: %lf\n", dpu_time_ms);
 #endif
+    }
+}
+
+float ***
+alloc_cpu_result_buffer(embedding_info *emb_info, input_info *i_info) {
+
+    float ***cpu_buffer = (float ***) malloc(emb_info->nr_embedding * sizeof(float **));
+    for (uint64_t k = 0; k < emb_info->nr_embedding; k++) {
+        cpu_buffer[k] = (float **) malloc(i_info->nr_batches * sizeof(float *));
+        for (uint64_t j = 0; j < i_info->nr_batches; j++) {
+            cpu_buffer[k][j] = (float *) malloc(emb_info->nr_cols * sizeof(float));
+        }
+    }
+    return cpu_buffer;
+}
+
+void
+free_cpu_result_buffer(float ***buffer, embedding_info *emb_info, input_info *i_info) {
+
+    for (uint64_t k = 0; k < emb_info->nr_embedding; k++) {
+        for (uint64_t j = 0; j < i_info->nr_batches; j++) {
+            free(buffer[k][j]);
+        }
+    }
+    for (uint64_t k = 0; k < emb_info->nr_embedding; k++) {
+        free(buffer[k]);
+    }
+    free(buffer);
 }
 
 float **
@@ -689,6 +742,7 @@ main() {
     int32_t **emb_tables = alloc_emb_tables(emb_info);
 
     float **result_buffer = alloc_result_buffer(emb_info, i_info);
+    float ***cpu_results = alloc_cpu_result_buffer(emb_info, i_info);
     int32_t **dpu_result_buffer = alloc_dpu_result_buffer(rank_mapping, emb_info, i_info);
 
     /* creates synthetic embedding parametes and transfet it to DPU MRAM */
@@ -711,7 +765,7 @@ main() {
 
         /* perform inference */
         synthetic_inference(batch->indices, batch->offsets, batch->input_info, rank_mapping,
-                            emb_tables, result_buffer, dpu_result_buffer, emb_info);
+                            emb_tables, cpu_results, result_buffer, dpu_result_buffer, emb_info);
 
         FIFO_POP_RELEASE(*INPUT_FIFO);
     }
@@ -719,6 +773,7 @@ main() {
 
     free_result_buffer(result_buffer, emb_info->nr_embedding);
     free_dpu_result_buffer(nr_dpus, dpu_result_buffer);
+    free_cpu_result_buffer(cpu_results, emb_info, i_info);
     free_emb_tables(emb_tables, emb_info);
 
     free_fifo_pool(FIFO_POOL, emb_info);
