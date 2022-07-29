@@ -10,7 +10,8 @@
 #include <stdlib.h>
 #include <time.h>
 
-struct FIFO_POOL *FIFO_POOL;
+/** @brief global static fifo pool structure */
+static struct FIFO_POOL *FIFO_POOL = NULL;
 
 /**
  *  @brief alloc synthetic embedding tables on HCPU side
@@ -47,7 +48,8 @@ free_emb_tables(int32_t **emb_tables, embedding_info *emb_info) {
 enum emb_datagen { RAND, CPT, ZERO, NONE };
 
 /**
- *  @brief populate embedding table with synthetic data
+ *  @brief populate embedding table with synthetic data of 3 different kind (random, reference
+ * counter, zeros )
  *  @param rank_mapping information about rank embedding mapping
  *  @param emb_info information about embedding configuration
  *  @param emb_tables embedding tables
@@ -71,7 +73,6 @@ synthetic_populate(embedding_rank_mapping *rank_mapping, embedding_info *emb_inf
             }
         }
     } else if (emb_data_type == CPT) {
-        uint64_t cpt = 0;
         for (uint64_t embedding_index = 0; embedding_index < emb_info->nr_embedding;
              embedding_index++) {
             for (int i = 0; i < emb_info->nr_rows * emb_info->nr_cols; i++) {
@@ -79,7 +80,7 @@ synthetic_populate(embedding_rank_mapping *rank_mapping, embedding_info *emb_inf
                 cpt++;
                 if ((float) (cpt) > (float) INT32_MAX / INDEX_PER_BATCH)
                     cpt = 0;
-                //     printf("cpt %d\n", emb_tables[embedding_index][i]);
+                // printf("cpt %d\n", emb_tables[embedding_index][i]);
 
                 sign = sign * -1;
             }
@@ -102,14 +103,13 @@ synthetic_populate(embedding_rank_mapping *rank_mapping, embedding_info *emb_inf
 /**
  *   @brief check_one_embedding_set_inference
  *   @param embedding_index_start  start index in embedding array
- *   @param emb_valid output indicates if DPU results is valid for the current embedding
  *   @param emb_tables embedding tables
  *   @param indices embedding input indices
  *   @param offsets embedding input offset
  *   @param indices_len embedding input lendgth
  *   @param nr_batches number of batches for input
  *   @param nr_cols embedding number of cols
- *   @param results embedding DPU results
+ *   @param cpu_results CPU result buffer
  *   @param nr_embedding number of embedding
  */
 void
@@ -175,6 +175,7 @@ pthread_t THREAD_MAP[MAX_NR_EMBEDDING];
 #define CPU_NR_THREAD_MAX 100
 
 /** @brief check DPU embedding inference result for each embedding and each batch
+ *  @param nr_thread number of thread for CPU lookup
  *  @param emb_tables host side embeding tables
  *  @param nr_embedding number of embedding in emb_tables
  *  @param indices array that stores indices [EMB_INDEX][BATCH_INDEX][INDEXES]
@@ -183,13 +184,12 @@ pthread_t THREAD_MAP[MAX_NR_EMBEDDING];
  *  @param indices_len  gives the lenght of the input indices vector for each embedding [EMB_INDEX]
  *  @param nr_batches gives the number of batch (same for each embedding) in indices
  *  @param nr_cols Embedding Number of columns (same for each embedding)
- *  @param results DPU embedding inference result buffer [EMB_INDEX][BATCH_INDEX * NR_COLS]
- *  @return host model result and DPU results are the same or not
+ *  @param cpu_results CPU results buffer
  */
 void
 cpu_lookup(uint64_t nr_thread, int32_t **emb_tables, uint64_t nr_embedding, uint32_t **indices,
            uint32_t **offsets, uint64_t *indices_len, uint64_t nr_batches, uint64_t nr_cols,
-           float ***cpu_results, int32_t *ret) {
+           float ***cpu_results) {
 
 #define CPU_MT 1
 #if (CPU_MT == 1)
@@ -225,19 +225,17 @@ cpu_lookup(uint64_t nr_thread, int32_t **emb_tables, uint64_t nr_embedding, uint
 #else
     param_map_t **param = malloc(sizeof(param_map_t *) * 1);
 
-    param[0] = (param_map_t *) malloc(sizeof(param_map_t));
-    param[0]->emb_valid = emb_valid;
-    param[0]->embdedding_index = 0;
-    param[0]->emb_tables = emb_tables;
-    param[0]->indices = indices;
-    param[0]->offsets = offsets;
-    param[0]->indices_len = indices_len;
-    param[0]->nr_batches = nr_batches;
-    param[0]->nr_cols = nr_cols;
-    param[0]->results = results;
-    param[0]->nr_embedding = nr_embedding;
+    param[emb_lot_index]->embdedding_index = 0;
+    param[emb_lot_index]->emb_tables = emb_tables;
+    param[emb_lot_index]->indices = indices;
+    param[emb_lot_index]->offsets = offsets;
+    param[emb_lot_index]->indices_len = indices_len;
+    param[emb_lot_index]->nr_batches = nr_batches;
+    param[emb_lot_index]->nr_cols = nr_cols;
+    param[emb_lot_index]->nr_embedding = nr_embedding;
+    param[emb_lot_index]->cpu_results = cpu_results;
 
-    pthread_create(&THREAD_MAP[0], NULL, thread_map_emb_check, param[0]);
+    pthread_create(&THREAD_MAP[0], NULL, thread_cpu_embedding_lookup, param[0]);
     pthread_join(THREAD_MAP[0], NULL);
 
     for (int i = 0; i < 1; i++)
@@ -247,6 +245,13 @@ cpu_lookup(uint64_t nr_thread, int32_t **emb_tables, uint64_t nr_embedding, uint
 #endif
 }
 
+/**
+ *  @brief allocate input indices buffer
+ *  @param nr_embedding number of embedding
+ *  @param nr_batches batch size (number of indice vector per batch)
+ *  @param indices_per_batch number of indices per indice vector
+ *  @return buffer
+ */
 uint32_t **
 alloc_indices_buffer(uint64_t nr_embedding, uint64_t nr_batches, uint64_t indices_per_batch) {
     uint32_t **indices = (uint32_t **) malloc(nr_embedding * sizeof(uint32_t *));
@@ -256,6 +261,11 @@ alloc_indices_buffer(uint64_t nr_embedding, uint64_t nr_batches, uint64_t indice
     return indices;
 }
 
+/**
+ *  @brief free input indices buffer
+ *  @param indices input indices buffer
+ *  @param nr_embedding number of embedding
+ */
 void
 free_indices_buffer(uint32_t **indices, uint64_t nr_embedding) {
     for (uint32_t k = 0; k < nr_embedding; k++) {
@@ -264,6 +274,12 @@ free_indices_buffer(uint32_t **indices, uint64_t nr_embedding) {
     free(indices);
 }
 
+/**
+ *  @brief allocate offset buffer
+ *  @param nr_embedding number of embedding
+ *  @param nr_batches batch size (number of indice vector per batch)
+ *  @return buffer
+ */
 uint32_t **
 alloc_offset_buffer(uint64_t nr_embedding, uint64_t nr_batches) {
     uint32_t **offsets = (uint32_t **) malloc(nr_embedding * sizeof(uint32_t *));
@@ -273,6 +289,11 @@ alloc_offset_buffer(uint64_t nr_embedding, uint64_t nr_batches) {
     return offsets;
 }
 
+/**
+ *  @brief free input offset buffer
+ *  @param offsets input offset buffer
+ *  @param nr_embedding number of embedding
+ */
 void
 free_offset_buffer(uint32_t **offsets, uint64_t nr_embedding) {
     for (uint32_t k = 0; k < nr_embedding; k++) {
@@ -281,21 +302,41 @@ free_offset_buffer(uint32_t **offsets, uint64_t nr_embedding) {
     free(offsets);
 }
 
+/**
+ *  @brief alloc input info structure
+ *  @param nr_embedding number of embedding
+ *  @param nr_batches batch size (number of indice vector per batch)
+ *  @param indices_per_batch number of indices per indice vector
+ *  @return input info structure
+ */
 input_info *
-alloc_input_info(uint64_t nr_embedding, uint64_t nr_batches, uint64_t nr_indexes) {
+alloc_input_info(uint64_t nr_embedding, uint64_t nr_batches, uint64_t index_per_batch) {
 
     struct input_info *info = malloc(sizeof(struct input_info));
-    info->nr_indexes = nr_indexes;
+    info->nr_indexes = index_per_batch;
     info->indices_len = (uint64_t *) malloc(MAX_NR_EMBEDDING * sizeof(uint64_t));
     info->nr_batches = nr_batches;
 
     return info;
 }
+
+/**
+ *  @brief free input info structure
+ *  @param info input info structure
+ */
 void
 free_input_info(struct input_info *info) {
     free(info->indices_len);
 }
 
+/**
+ *  @brief allocate embedding info structure
+ *  @param nr_embedding number of embedding
+ *  @param nr_rows number of rows for each embedding
+ *  @param nr_cols number of cols for each embedding
+ *  @param sizeT embedding data size (byte)
+ *  @return embedding info structure
+ */
 embedding_info *
 alloc_embedding_info(uint32_t nr_embedding, uint32_t nr_rows, uint32_t nr_cols, uint32_t sizeT) {
     embedding_info *emb_info = malloc(sizeof(embedding_info));
@@ -305,11 +346,24 @@ alloc_embedding_info(uint32_t nr_embedding, uint32_t nr_rows, uint32_t nr_cols, 
     emb_info->sizeT = sizeT;
     return emb_info;
 };
+
+/**
+ *  @brief free embedding info structure
+ *  @param emb_info embedding info structure
+ */
 void
 free_embedding_info(embedding_info *emb_info) {
     free(emb_info);
 }
 
+/**
+ *  @brief computes sizes of synthetic input structure
+ *  @param input_info input info structure
+ *  @param indices_per_batch input indices buffer
+ *  @param nr_embedding number of embedding
+ *  @param nr_batches batch size (number of indice vector per batch)
+ *  @param nr_rows embedding number of rows
+ */
 void
 build_synthetic_input_size(struct input_info *input_info, uint32_t **indices_per_batch,
                            uint64_t nr_embedding, uint64_t nr_batches, uint64_t nr_rows) {
@@ -331,6 +385,17 @@ build_synthetic_input_size(struct input_info *input_info, uint32_t **indices_per
     }
 }
 
+/**
+ *  @brief computes sizes of synthetic input structure
+ *  @param indices input indices buffer
+ *  @param offsets input offsers buffer
+ *  @param input_info input info structure
+ *  @param nr_embedding number of embedding
+ *  @param nr_batches batch size (number of indice vector per batch)
+ *  @param indices_per_batch input indices per batch
+ *  @param nr_rows number of embedding rows
+ *  @param nr_cols number of embedding cols
+ */
 void
 build_synthetic_input_data(uint32_t **indices, uint32_t **offsets, struct input_info *input_info,
                            uint64_t nr_embedding, uint64_t nr_batches, uint32_t **indices_per_batch,
@@ -358,14 +423,17 @@ build_synthetic_input_data(uint32_t **indices, uint32_t **offsets, struct input_
     }
 }
 
-/** @brief perform DPU embedding table inference given input indices with multiple embedding and
- * multiple batch
- *  @param result_buffer embedding lookup operation DPU results
- *  @param nr_embedding number of embedding in emb_tables
- *  @param nr_batches gives the number of batch (same for each embedding) in indices
- *  @param indices_pet_batch numbr of indices per batch
- *  @param nr_rows Embedding Number of rows (same for each embedding)
- *  @param nr_cols Embedding Number of columns (same for each embedding)
+/**
+ *  @brief perform DPU embedding table inference given input indices with multiple embedding
+ *  @param indices input indices buffer
+ *  @param offsets input offsers buffer
+ *  @param input_info input info structure
+ *  @param rank_mapping_info rank embedding mapping structure
+ *  @param emb_tables embedding table buffer
+ *  @param cpu_results cpu_results buffer
+ *  @param result_buffer DPU formated result buffer
+ *  @param dpu_result_buffer DPU result buffer
+ *  @param emb_info embedding info
  */
 void
 synthetic_inference(uint32_t **indices, uint32_t **offsets, input_info *input_info,
@@ -411,8 +479,6 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, input_info *input_in
     }
     double dpu_time_ms = dpu_time / multi_run;
 
-    int32_t ret[NR_COLS];
-
     {
         uint64_t cpu_nr_thread = CPU_NR_THREAD_MAX;
         if (cpu_nr_thread > nr_embedding)
@@ -428,7 +494,7 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, input_info *input_in
             clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_process_time);
 
             cpu_lookup(cpu_nr_thread, emb_tables, nr_embedding, indices, offsets,
-                       input_info->indices_len, nr_batches, nr_cols, cpu_results, ret);
+                       input_info->indices_len, nr_batches, nr_cols, cpu_results);
             clock_gettime(CLOCK_MONOTONIC_RAW, &stop_time);
             clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &stop_process_time);
             double time = (float) ((stop_time.tv_sec - start_time.tv_sec) * 1e9 +
@@ -494,6 +560,12 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, input_info *input_in
     }
 }
 
+/**
+ * @brief allocate cpu result buffer
+ * @param emb_info embedding info structure
+ * @param i_info input info structure
+ * @return buffer
+ */
 float ***
 alloc_cpu_result_buffer(embedding_info *emb_info, input_info *i_info) {
 
@@ -507,6 +579,12 @@ alloc_cpu_result_buffer(embedding_info *emb_info, input_info *i_info) {
     return cpu_buffer;
 }
 
+/**
+ * @brief allocate cpu result buffer
+ * @param buffer cpu result buffer
+ * @param emb_info embedding info structure
+ * @param i_info input info structure
+ */
 void
 free_cpu_result_buffer(float ***buffer, embedding_info *emb_info, input_info *i_info) {
 
@@ -521,6 +599,12 @@ free_cpu_result_buffer(float ***buffer, embedding_info *emb_info, input_info *i_
     free(buffer);
 }
 
+/**
+ * @brief allocate DPU formated result buffer
+ * @param emb_info embedding info structure
+ * @param i_info input info structure
+ * @return buffer
+ */
 float **
 alloc_result_buffer(embedding_info *emb_info, input_info *i_info) {
     float **result_buffer = (float **) malloc(emb_info->nr_embedding * sizeof(float *));
@@ -531,6 +615,11 @@ alloc_result_buffer(embedding_info *emb_info, input_info *i_info) {
     return result_buffer;
 }
 
+/**
+ * @brief free DPU formated result buffer
+ * @param buffer cpu result buffer
+ * @param nr_embedding number of embedding
+ */
 void
 free_result_buffer(float **buffer, uint64_t nr_embedding) {
 
@@ -540,6 +629,12 @@ free_result_buffer(float **buffer, uint64_t nr_embedding) {
     free(buffer);
 }
 
+/**
+ * @brief alloc DPU results buffer
+ * @param rank_mapping_info rank embedding mapping info
+ * @param emb_info embedding info structure
+ * @return buffer
+ */
 int32_t **
 alloc_dpu_result_buffer(embedding_rank_mapping *rank_mapping_info, embedding_info *emb_info,
                         input_info *i_info) {
@@ -555,6 +650,11 @@ alloc_dpu_result_buffer(embedding_rank_mapping *rank_mapping_info, embedding_inf
     return dpu_result_buffer;
 }
 
+/**
+ * @brief free DPU result buffer
+ * @param nr_dpus total number of allocated DPUs
+ * @param dpu_result_buffer buffer
+ */
 void
 free_dpu_result_buffer(uint32_t nr_dpus, int32_t **dpu_result_buffer) {
     for (uint64_t k = 0; k < nr_dpus; k++) {
@@ -576,6 +676,12 @@ struct FIFO_POOL {
     FIFO stage_1;
 };
 
+/**
+ * @brief alloc pipeline fifo pool structure
+ * @param emb_info embedding info structure
+ * @param i_info input info structure
+ * @return fifo pool structure
+ */
 struct FIFO_POOL *
 alloc_fifo_pool(embedding_info *emb_info, input_info *i_info) {
 
@@ -598,6 +704,11 @@ alloc_fifo_pool(embedding_info *emb_info, input_info *i_info) {
     return this;
 }
 
+/**
+ * @brief free pipeline fifo pool structure
+ * @param this fifo pool structure
+ * @param emb_info embedding info structure
+ */
 void
 free_fifo_pool(struct FIFO_POOL *this, embedding_info *emb_info) {
 
@@ -620,9 +731,8 @@ struct pipeline_args {
 };
 
 /**
- * @brief TBC
- *
- * @param argv NULL
+ * @brief thread function for input indices generation
+ * @param argv thread args
  */
 void *
 thread_build_sythetic_data(void *argv) {
@@ -676,19 +786,22 @@ thread_build_sythetic_data(void *argv) {
     return NULL;
 }
 
-/**
- * @brief TBC
- *
- * @param argv NULL
+/** TBC
+ * @brief thread function for DPU output results merging
+ * @param argv thread args
  */
 void *
 thread_mege_results(void *argv) {
     /* thread exit */
     return NULL;
 }
+
 /**
- * @brief INIT_THREAD_POOL : initialize thread pool
- * @param this thread pool pointer
+ * @brief initialize thread pool structure
+ * @param this fifo pool structure
+ * @param rank_mapping_info rank embedding mapping info
+ * @param emb_info embedding info structure
+ * @param i_info input info structure
  */
 void
 INIT_THREAD_POOL(struct THREAD_POOL *this, embedding_rank_mapping *rank_mapping_info,
@@ -704,8 +817,8 @@ INIT_THREAD_POOL(struct THREAD_POOL *this, embedding_rank_mapping *rank_mapping_
 }
 
 /**
- * @brief JOIN_THREAD_POOL : wait end of all thread in thread pool
- * @param this thread pool pointer
+ * @brief join all thread of thread pool
+ * @param this thread pool structure
  */
 void
 JOIN_THREAD_POOL(struct THREAD_POOL *this) {
@@ -713,7 +826,7 @@ JOIN_THREAD_POOL(struct THREAD_POOL *this) {
         pthread_join(this->th[i], NULL);
 }
 
-/** @brief synthetize embedding table, input indices and perform DPU embedding table */
+/** @brief perform DPU/CPU benchmark of embedding tables */
 int
 main() {
 
@@ -728,7 +841,7 @@ main() {
         alloc_embedding_info(nr_embedding, nr_rows, nr_cols, sizeof(int32_t));
 
     FIFO_POOL = alloc_fifo_pool(emb_info, i_info);
-    alloc_embedding_dpu_backend();
+    alloc_dpu_backend();
 
     /* alloc final results buffer */
     printf("map embeddings on DPUs\n");
@@ -737,7 +850,6 @@ main() {
     printf("nr cols per dpu %lu\n", rank_mapping->nr_cols_per_dpu);
 
     uint32_t nr_dpus = rank_mapping->nr_dpus;
-    alloc_dpus(nr_dpus);
     printf("alloc dpus %u\n", nr_dpus);
     int32_t **emb_tables = alloc_emb_tables(emb_info);
 
@@ -777,7 +889,7 @@ main() {
     free_emb_tables(emb_tables, emb_info);
 
     free_fifo_pool(FIFO_POOL, emb_info);
-    free_embedding_dpu_backend();
+    free_dpu_backend();
     free_embedding_info(emb_info);
     free_input_info(i_info);
 }
