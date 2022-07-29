@@ -5,6 +5,6 @@ rank embedding chunk mapping don't work for odd num
 
 
 understant weird DPU per rank result of allocation
-replace NR_BATCHES by BATCH_SIZE
+replace BATCH_SIZE by BATCH_SIZE
 replace NR_ROW by EMB_SIZE
 

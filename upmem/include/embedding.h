@@ -1,3 +1,6 @@
+#ifndef __EMB__
+#define __EMB__
+
 #include "common.h"
 #include "emb_types.h"
 #include "host/include/host.h"
@@ -13,54 +16,23 @@
 #include <time.h>
 #include <unistd.h>
 
-#define TIME_NOW(_t) (clock_gettime(CLOCK_MONOTONIC, (_t)))
-
-/**
- * @brief TBC
- * @param TBC
+/** @brief information about embedding input
+ *  @param indices_len store dpu indices len (elem vector x batch size) for each DPU
+ *  @param nr_batches input batch size
+ *  @param nr_indexex nomber of indices in each input element
  */
-typedef struct dpu_runtime_totals {
-    double execution_time_prepare;
-    double execution_time_populate_copy_in;
-    double execution_time_copy_in;
-    double execution_time_copy_out;
-    double execution_time_aggregate_result;
-    double execution_time_launch;
-} dpu_runtime_totals;
-
-/**
- * @brief TBC
- * @param TBC
- */
-typedef struct dpu_timespec {
-    long tv_nsec;
-    long tv_sec;
-} dpu_timespec;
-
-/**
- * @brief TBC
- * @param TBC
- */
-typedef struct dpu_runtime_interval {
-    dpu_timespec start;
-    dpu_timespec stop;
-} dpu_runtime_interval;
-
-/**
- * @brief TBC
- * @param TBC
- */
-typedef struct dpu_runtime_group {
-    unsigned int in_use;
-    unsigned int length;
-    dpu_runtime_interval *intervals;
-} dpu_runtime_group;
-
 typedef struct input_info {
     uint64_t *indices_len;
     uint64_t nr_batches;
     uint64_t nr_indexes;
 } input_info;
+
+/** @brief agregates input batch buffer structure for pipelined system
+ *  @param valid validity of current batch
+ *  @param indices array that stores indices [EMB_INDEX][BATCH_INDEX * INDEXES]
+ *  @param offsets array that stores indices offset (pytorch EmbedingBag convention)
+ *  @param input_info input info structure
+ */
 typedef struct input_batch {
     bool valid;
     uint32_t **indices;
@@ -68,12 +40,24 @@ typedef struct input_batch {
     input_info *input_info;
 } input_batch;
 
+/** @brief single DPU embedding mapping information structure
+ *  @param nr_cols number of collumn in the DPU
+ *  @param start_col index of first column in the DPU
+ *  @param embedding_index embedding index mapped in the DPU
+ */
 typedef struct embedding_dpu_mapping {
     uint64_t nr_cols;
     uint32_t start_col;
     uint32_t embedding_index;
 } embedding_dpu_mapping;
 
+/** @brief information about embedding configuration
+ *  @param nr_embedding number of embedding
+ *  @param nr_rows number of rows in the DPU
+ *  @param nr_cols number of collumn in the DPU
+ *  @param start_col index of first column in the DPU
+ *  @param sizeT embedding data size (byte)
+ */
 typedef struct embedding_info {
     uint32_t nr_embedding;
     uint32_t nr_rows;
@@ -81,6 +65,15 @@ typedef struct embedding_info {
     uint32_t sizeT;
 } embedding_info;
 
+/** @brief global ranks embedding mapping information structure
+ *  @param nr_dpus total number of DPUs
+ *  @param nr_ranks total number of ranks
+ *  @param nr_cols_per_dpu full DPU number of column
+ *  @param dpu_part_col non full DPU number of column
+ *  @param rank_nr_dpus number of ranks in each DPU
+ *  @param rank_start_dpus absolute index of first DPU in each rank
+ *  @param rank_dpus_mapping dpu mapping matrix for each DPU of each rank
+ */
 typedef struct embeding_rank_mapping {
     uint32_t nr_dpus;
     uint32_t nr_ranks;
@@ -110,13 +103,15 @@ populate_mram(embedding_rank_mapping *rank_mapping, embedding_info *emb_info, in
 dpu_error_t
 post_process(struct dpu_set_t dpu_rank, uint64_t rank_id, void *arg);
 
-int32_t *
+void
 lookup(uint32_t **indices, uint32_t **offsets, struct input_info *input_info,
        embedding_rank_mapping *rank_mapping_info, uint64_t nr_embedding, uint64_t nr_cols,
        uint64_t nr_rows, float **result_buffer, int32_t **dpu_result_buffer);
 
 void
-free_embedding_dpu_backend();
+free_dpu_backend();
 
 void
-alloc_embedding_dpu_backend();
+alloc_dpu_backend();
+
+#endif

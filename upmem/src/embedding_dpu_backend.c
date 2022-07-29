@@ -8,15 +8,16 @@
 #include <stdlib.h>
 #include <time.h>
 
+/** @brief DPU binary path */
 #define DPU_BINARY "./build/embdpu"
+
 /** @brief global referene to dpu_set */
 struct dpu_set_t dpu_set;
 
-/** @brief alloc dpu set with given number of dpus */
-void
-alloc_dpus(uint32_t nr_dpus) {
-}
-
+/**
+ * @brief free embedding rank mapping structure
+ * @param rank_mapping embedding rank mapping structure
+ */
 void
 free_embedding_rank_mapping(embedding_rank_mapping *rank_mapping) {
     for (uint32_t rank_index = 0; rank_index < rank_mapping->nr_ranks; rank_index++) {
@@ -27,6 +28,12 @@ free_embedding_rank_mapping(embedding_rank_mapping *rank_mapping) {
     free(rank_mapping);
 }
 
+/**
+ * @brief build embedding rank mapping structure
+ * @param emb_info embedding info structure
+ * @param i_info input info structure
+ * @return embedding rank mapping structure
+ */
 embedding_rank_mapping *
 embedding_dpu_map(embedding_info *emb_info, input_info *i_info) {
 
@@ -48,8 +55,9 @@ embedding_dpu_map(embedding_info *emb_info, input_info *i_info) {
     printf("min nr cols per dpu %lu\n", min_col_per_dpu);
 
     /* check if the minimum number of column fit the MRAM EMB DATA SECTION */
-    assert("MRAM emb data too small" && nr_rows * sizeT * min_col_per_dpu < DPU_EMB_DATA_SIZE_BYTE);
-    nr_cols_per_dpu = DPU_EMB_DATA_SIZE_BYTE / (nr_rows * sizeT);
+    assert("MRAM emb data too small" &&
+           nr_rows * sizeT * min_col_per_dpu < MAX_DPU_EMB_TABLE_SIZE_BYTE);
+    nr_cols_per_dpu = MAX_DPU_EMB_TABLE_SIZE_BYTE / (nr_rows * sizeT);
     if (nr_cols_per_dpu > nr_cols)
         nr_cols_per_dpu = nr_cols;
 
@@ -68,8 +76,8 @@ embedding_dpu_map(embedding_info *emb_info, input_info *i_info) {
     emb_info->nr_embedding = nr_embedding;
     rank_mapping->nr_cols_per_dpu = nr_cols_per_dpu;
     rank_mapping->dpu_part_col = dpu_part_col;
-    printf("MRAM_SIZE %u DPU_EMB_DATA_SIZE_BYTE %lu nr cols per dpus %lu\n", MRAM_SIZE,
-           DPU_EMB_DATA_SIZE_BYTE, nr_cols_per_dpu);
+    printf("MRAM_SIZE %u MAX_DPU_EMB_TABLE_SIZE_BYTE %lu nr cols per dpus %lu\n", MRAM_SIZE,
+           MAX_DPU_EMB_TABLE_SIZE_BYTE, nr_cols_per_dpu);
     {
         uint32_t dpu_total_cols = 0;
         uint32_t embedding_index = 0;
@@ -188,8 +196,10 @@ embedding_dpu_map(embedding_info *emb_info, input_info *i_info) {
     return rank_mapping;
 }
 
-/** @brief transfer one embedding table params to DPU DRAM
- *  @param TODO
+/** @brief transfer embedding tables to DPUs MRAM
+ *  @param rank_mapping embedding rank mapping structure
+ *  @param emb_info embedding info structure
+ *  @param embedding_tables embedding tables buffer
  */
 void
 populate_mram(embedding_rank_mapping *rank_mapping, embedding_info *emb_info,
@@ -280,10 +290,10 @@ struct callback_input {
 
 struct callback_input *callback_data = NULL;
 
-/** @brief host side post processing of DPU side embedding results
- *  @param dpu_rank pointer to rank dpu set
- *  @param rank_id index of the rank
- *  @param args rank callback generic args
+/** @brief rank callback for DPU results post processing
+ *  @param rank dpu_set rank pointer
+ *  @param rank_index index of the rank
+ *  @param cb_args thread function args
  */
 dpu_error_t
 gather_rank_embedding_results(struct dpu_set_t rank, uint32_t rank_index, void *cb_arg) {
@@ -348,19 +358,18 @@ gather_rank_embedding_results(struct dpu_set_t rank, uint32_t rank_index, void *
     return DPU_OK;
 }
 
-/** @brief perform DPU lookup operation in embedding set and for input indices of
- *        multiple batch
+/** @brief perform DPU lookup operation
  *  @param indices array that stores indices [EMB_INDEX][BATCH_INDEX * INDEXES]
  *  @param offsets array that stores indices offset (pytorch EmbedingBag convention)
- *  [EMB_INDEX][BATCH_INDEX][OFFSET]
- *  @param indices_len  gives the lenght of the input indices vector for each embedding
- * [EMB_INDEX]
- *  @param nr_batches_per_embedding gives the number of batch (same for each embedding) in
- * indices
- *  @param result_buffer embedding lookup operation DPU results
- *  @return TBC
+ *  @param input_info input info structure
+ *  @param rank_mapping embedding rank mapping structure
+ *  @param nr_embedding number of embedding
+ *  @param nr_cols number of embedding column
+ *  @param n_rows number of embedding rows
+ *  @param result_buffer DPU formated result buffer
+ *  @param dpu_result_buffer dpu_result_buffer
  */
-int32_t *
+void
 lookup(uint32_t **indices, uint32_t **offsets, input_info *input_info,
        embedding_rank_mapping *rank_mapping, uint64_t nr_embedding, uint64_t nr_cols,
        uint64_t nr_rows, float **result_buffer, int32_t **dpu_result_buffer) {
@@ -460,17 +469,17 @@ lookup(uint32_t **indices, uint32_t **offsets, input_info *input_info,
     DPU_ASSERT(
         dpu_callback(dpu_set, gather_rank_embedding_results, callback_data, DPU_CALLBACK_DEFAULT));
     free(lengths);
-
-    return 0;
 }
 
+/** @brief allocate DPU backend */
 void
-alloc_embedding_dpu_backend() {
+alloc_dpu_backend() {
     assert(callback_data == NULL);
     callback_data = malloc(sizeof(struct callback_input));
 }
 
+/** @brief free DPU backend */
 void
-free_embedding_dpu_backend() {
+free_dpu_backend() {
     free(callback_data);
 }

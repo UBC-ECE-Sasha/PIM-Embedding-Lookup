@@ -1,3 +1,6 @@
+#ifndef __EMB_TYPES_
+#define __EMB_TYPES_
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -22,3 +25,5 @@ struct query_len {
     uint64_t indices_len;
     uint64_t nr_batches;
 } __attribute__((packed));
+
+#endif

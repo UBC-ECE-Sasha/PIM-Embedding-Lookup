@@ -1,57 +1,64 @@
 .PHONY:all
 
-MAX_NR_DPUS=10000
-MAX_NR_EMBEDDING=2000
-MAX_INDEX_PER_BATCH=160
-MAX_NR_BATCHES=60
-NR_COLS=64
-NR_BATCHES=32
-NR_RUN=1
-INDEX_PER_BATCH=120
-MAX_INDEX_PER_BATCH_RAND=160
-NR_ROWS=500000
-NR_EMBEDDING=730
+# DPUs information
 NR_TASKLETS=16
-CHECK_RESULTS=1
+
+# limits
+MAX_EMBEDDING_DIM=64
+MAX_NR_EMBEDDING=2000
+MAX_INDICES_PER_LOOKUP=160
+MAX_BATCH_SIZE=32
+MAX_INDICES_PER_LOOKUP_RAND=160
+
+# embedding information
+EMBEDDING_DIM=64
+EMBEDDING_DEPTH=500000
+NR_EMBEDDING=50
+
+# inputs information
+BATCH_SIZE=32
+INDICES_PER_LOOKUP=120
 RAND_INPUT_SIZE=0
 
+# benchmark information
+NR_RUN=5
+CHECK_RESULTS=1
 
-build: build/emb build/embdpu
+# CPU/DPU check rounding error margin
+CHECK_RESULT_ABSOLUTE_ROUNDING_ERROR_MARGIN=5000
 
-build/emb: src/*.c include/*.h
-	mkdir -p build
-	gcc -O3     -Wall -mavx -msse4 -lm -lz -lpthread -I include \
+build: build/bench build/embdpu
+
+build/bench: build/emblib
+	gcc -O3  -Wl,-rpath=build -Wall -mavx -msse4 -lm -lz -lpthread -L build/ -lemb -I include \
+		-DINDICES_PER_LOOKUP=${INDICES_PER_LOOKUP} \
+		-DEMBEDDING_DIM=${EMBEDDING_DIM} \
+		-DEMBEDDING_DEPTH=${EMBEDDING_DEPTH} \
 		-DNR_RUN=${NR_RUN} \
-		-DCHECK_RESULTS=${CHECK_RESULTS} \
-		-DMAX_NR_DPUS=${MAX_NR_DPUS} \
-		-DRAND_INPUT_SIZE=${RAND_INPUT_SIZE} \
-		-DMAX_INDEX_PER_BATCH_RAND=${MAX_INDEX_PER_BATCH_RAND} \
-		-DNR_TASKLETS=${NR_TASKLETS} \
-		-DMAX_INDEX_PER_BATCH=${MAX_INDEX_PER_BATCH} \
-		-DMAX_NR_EMBEDDING=${MAX_NR_EMBEDDING} \
-		-DMAX_NR_BATCHES=${MAX_NR_BATCHES} \
-		-DINDEX_PER_BATCH=${INDEX_PER_BATCH} \
-		-DNR_ROWS=${NR_ROWS} \
-		-DNR_BATCHES=${NR_BATCHES} \
+		-DBATCH_SIZE=${BATCH_SIZE} \
 		-DNR_EMBEDDING=${NR_EMBEDDING} \
-		-DNR_COLS=${NR_COLS} \
-		-o build/emb src/*.c  `dpu-pkg-config --cflags --libs dpu` 
+		-o build/emb  synthetic_dataset_embedding.c  `dpu-pkg-config --cflags --libs dpu`
+    
+build/emblib: src/*.c include/*.h
+	mkdir -p build
+	gcc -O3 -Wall -mavx -msse4 -lm -lz -lpthread -I include \
+		-DINDICES_PER_LOOKUP=${INDICES_PER_LOOKUP} \
+		-DCHECK_RESULTS=${CHECK_RESULTS} \
+		-DRAND_INPUT_SIZE=${RAND_INPUT_SIZE} \
+		-DMAX_INDICES_PER_LOOKUP_RAND=${MAX_INDICES_PER_LOOKUP_RAND} \
+		-DMAX_NR_EMBEDDING=${MAX_NR_EMBEDDING} \
+		-DMAX_BATCH_SIZE=${MAX_BATCH_SIZE} \
+		-DCHECK_RESULT_ABSOLUTE_ROUNDING_ERROR_MARGIN=${CHECK_RESULT_ABSOLUTE_ROUNDING_ERROR_MARGIN} \
+		-shared -o build/libemb.so -fPIC src/*.c  `dpu-pkg-config --cflags --libs dpu` 
 
 build/embdpu: src/dpu/*.c 
 	mkdir -p build
 	# TODO : why flto fails
 	dpu-clang -O3  -flto=thin -I include \
-		-DNR_RUN=${NR_RUN} \
+		-DMAX_EMBEDDING_DIM=${MAX_EMBEDDING_DIM} \
 		-DNR_TASKLETS=${NR_TASKLETS} \
-		-DMAX_NR_DPUS=${MAX_NR_DPUS} \
-		-DRAND_INPUT_SIZE=${RAND_INPUT_SIZE} \
-		-DMAX_INDEX_PER_BATCH=${MAX_INDEX_PER_BATCH} \
-		-DMAX_NR_EMBEDDING=${MAX_NR_EMBEDDING} \
-		-DMAX_NR_BATCHES=${MAX_NR_BATCHES} \
-		-DNR_EMBEDDING=${NR_EMBEDDING} \
-		-DINDEX_PER_BATCH=${INDEX_PER_BATCH} \
-		-DNR_ROWS=${NR_ROWS} \
-		-DNR_BATCHES=${NR_BATCHES} \
+		-DMAX_INDICES_PER_LOOKUP=${MAX_INDICES_PER_LOOKUP} \
+		-DMAX_BATCH_SIZE=${MAX_BATCH_SIZE} \
 		-o build/embdpu src/dpu/dpu_embedding.c
 
 clean:
