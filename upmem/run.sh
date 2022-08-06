@@ -40,7 +40,7 @@ kaggle_env() {
 
 build_pytorch=true
 random_env() {
-    export NR_TABLES=10
+    export NR_TABLES=5
     export NR_COLS=32
     export MAX_NR_BATCHES=64
     export NR_TASKLETS=14
