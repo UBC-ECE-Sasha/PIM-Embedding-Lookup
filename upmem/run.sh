@@ -38,7 +38,7 @@ kaggle_env() {
     export NR_TASKLETS=14
 }
 
-build_pytorch=true
+build_pytorch=false
 random_env() {
     export NR_TABLES=5
     export NR_COLS=32
