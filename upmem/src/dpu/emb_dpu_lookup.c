@@ -70,6 +70,14 @@ main() {
         batch_ptr++;
     }
     sem_take(&result_sem);
+
+    // // Check values
+    // printf("DPU: Check tmp_results values:\n[ ");
+    // for (int i = 0; i < 2*(int)(MAX_NR_BATCHES/NR_TASKLETS); i++) {
+    //     printf("%d, ", tmp_results[i]);
+    // }
+    // printf("]\n");
+
     if(me()!=NR_TASKLETS-1)
         mram_write(&tmp_results[0],&results[0], ALIGN(query_share*sizeof(int32_t),8));
     else

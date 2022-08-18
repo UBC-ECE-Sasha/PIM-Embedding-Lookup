@@ -188,12 +188,20 @@ dpu_error_t post_process(struct dpu_set_t dpu_rank, uint32_t rank_id, void *arg)
     // long post_proc_lat;
     // clock_gettime(CLOCK_REALTIME, &start);
 
+    //printf("C post_process(): nr_batches for %d = %d\n", rank_id, nr_batches[rank_id]);
+    //printf("C post_process(): NR_COLS for %d = %d\n", rank_id, NR_COLS);
+
+    //printf("C post_process(): Check tmp_results values:\n [%d][63][0] = %f, after div = %f\n", rank_id, (float)input->tmp_results[rank_id][63][63], (float)input->tmp_results[rank_id][63][63]/pow(10,9));
+
     if(rank_id<NR_TABLES){
         for (int j=0; j<NR_COLS; j++){
             for(int k=0; k<nr_batches[rank_id]; k++)
                 final_results[rank_id][k*NR_COLS+j]=(float)input->tmp_results[rank_id][j][k]/pow(10,9);
         }
     }
+    //printf("C post_process(): Check final_results values:\n [%d][63][0] = %f\n", rank_id, final_results[rank_id][63*NR_COLS+63]);
+
+    //printf("C post_process(): done for rank_id = %d\n", rank_id);
 
     // clock_gettime(CLOCK_REALTIME, &end);
     // post_proc_lat = end.tv_sec*1000000 + end.tv_usec - start.tv_sec*1000000 - start.tv_usec;
@@ -305,7 +313,11 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     
     DPU_ASSERT(dpu_callback(*dpu_set_ptr,post_process,(void*)callback_data,DPU_CALLBACK_ASYNC));
     //printf("callback done4\n");
+    DPU_FOREACH(*dpu_set_ptr, dpu) {
+        DPU_ASSERT(dpu_log_read(dpu, stdout));
+    }
     dpu_sync(*dpu_set_ptr);
+
     //printf("sync done\n");
     /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {
         if(runtime_group[table_id].in_use >= runtime_group[table_id].length) {
