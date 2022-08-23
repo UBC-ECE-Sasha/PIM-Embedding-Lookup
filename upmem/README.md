@@ -1,3 +1,13 @@
+## WARNING
+
+batch size > 50 for one embedding is not supported because
+embedding DPU replication feature doesn't exists.
+
+# TODO
+
+Embedding replication to support big batch size ( max 50 on DPU)
+but viewed > 50 from host side perspective thanks to Embedding Replication.
+
 ## dpu embedding
 
 Embedding lookup table running on UPMEM PIM DPU.
