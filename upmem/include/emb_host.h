@@ -15,11 +15,12 @@
 #include <unistd.h>
 #include <errno.h>
 #include <time.h>
+// #include <sys/time.h>
 
 #define RT_CONFIG 0
 
 #ifndef DPU_BINARY
-#    define DPU_BINARY "/home/upmem0016/niloo/new_project/PIM-Embedding-Lookup/upmem/build/release/dpu/emb_dpu_lookup" // Relative path regarding the PyTorch code
+#    define DPU_BINARY "/home/upmem0016/jwong5/PIM-Embedding-Lookup/upmem/build/release/dpu/emb_dpu_lookup" // Relative path regarding the PyTorch code
 #endif
 
 
@@ -172,19 +173,40 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *ta
 
 
 dpu_error_t post_process(struct dpu_set_t dpu_rank, uint32_t rank_id, void *arg){
+    // // PIM: Profiling
+    // struct timeval start;
+    // struct timeval end;
+
     struct callback_input *input=(struct callback_input*)arg;
     float** final_results=input->final_results;
     uint32_t* nr_batches=input->nr_batches;
     //int32_t*** tmp_results=input->tmp_results;
     //printf("before log read\n");
     dpu_error_t status=DPU_OK;
-    //printf("inside callbacnk:%d\n",rank_id);
+    //printf("inside callback:%d\n",rank_id);
+
+    // long post_proc_lat;
+    // clock_gettime(CLOCK_REALTIME, &start);
+
+    //printf("C post_process(): nr_batches for %d = %d\n", rank_id, nr_batches[rank_id]);
+    //printf("C post_process(): NR_COLS for %d = %d\n", rank_id, NR_COLS);
+
+    //printf("C post_process(): Check tmp_results values:\n [%d][63][0] = %f, after div = %f\n", rank_id, (float)input->tmp_results[rank_id][63][63], (float)input->tmp_results[rank_id][63][63]/pow(10,9));
+
     if(rank_id<NR_TABLES){
         for (int j=0; j<NR_COLS; j++){
             for(int k=0; k<nr_batches[rank_id]; k++)
                 final_results[rank_id][k*NR_COLS+j]=(float)input->tmp_results[rank_id][j][k]/pow(10,9);
         }
     }
+    //printf("C post_process(): Check final_results values:\n [%d][63][0] = %f\n", rank_id, final_results[rank_id][63*NR_COLS+63]);
+
+    //printf("C post_process(): done for rank_id = %d\n", rank_id);
+
+    // clock_gettime(CLOCK_REALTIME, &end);
+    // post_proc_lat = end.tv_sec*1000000 + end.tv_usec - start.tv_sec*1000000 - start.tv_usec;
+    // printf("C: Post processing latency: %ld", post_proc_lat);
+
     return status;
 }
 
@@ -205,6 +227,9 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     // // Check env
     // printf("C test: Check envs: NR_COLS=%d, NR_TABLES=%d, MAX_NR_BATCHES=%d, NR_TASKLETS=%d", NR_COLS, NR_TABLES, MAX_NR_BATCHES, NR_TASKLETS);
 
+    // // PIM: Profiling
+    // struct timespec start, end;
+
     //printf("starting lookup\n");
     struct dpu_set_t *dpu_set_ptr = (struct dpu_set_t *) dpu_set_ptr_untyped;
     //struct timespec start, end;
@@ -212,6 +237,10 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     struct dpu_set_t dpu_rank,dpu;
     struct query_len lengths[NR_TABLES];
 
+
+    // long ind_copy_lat;
+    // TIME_NOW(&start);
+    //printf("After first gettimeofday()");
     //if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
     DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
         DPU_ASSERT(dpu_prepare_xfer(dpu,indices[(int)(dpu_id/NR_COLS)]));
@@ -227,6 +256,12 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
         nr_batches[0]*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
     //printf("copied offsets\n");
 
+    // TIME_NOW(&end);
+    // ind_copy_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
+
+    // long query_copy_lat;
+    // TIME_NOW(&start);
+
     DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
         table_id=(int)(dpu_id/NR_COLS);
         lengths[table_id].indices_len=*indices_len;
@@ -237,11 +272,24 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
         sizeof(struct query_len),DPU_XFER_DEFAULT));
     //printf("query copied\n");
 
+    // TIME_NOW(&end);
+    // query_copy_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
+
+    // long dpu_launch_lat;
+    // TIME_NOW(&start);
+
     DPU_ASSERT(dpu_launch(*dpu_set_ptr, DPU_SYNCHRONOUS));
     //printf("launch done\n");
 
+    // TIME_NOW(&end);
+    // dpu_launch_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
+
     int32_t ***tmp_results=(int32_t***)malloc(NR_TABLES*sizeof(int32_t**));
     //printf("wanna copy\n");
+
+    // long results_copy_lat;
+    // TIME_NOW(&start);
+
     DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
         if(dpu_id%NR_COLS==0){
             table_id=dpu_id/NR_COLS;
@@ -253,6 +301,9 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     //printf("copying back\n");
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr, DPU_XFER_FROM_DPU, "results", 0, ALIGN(sizeof(int32_t)*nr_batches[0],8), DPU_XFER_DEFAULT));
     //printf("Copies done\n");
+
+    // TIME_NOW(&end);
+    // results_copy_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
     
     struct callback_input *callback_data=(struct callback_input*)malloc(sizeof(struct callback_input));
     callback_data->final_results=final_results;
@@ -261,13 +312,17 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     //printf("callback input allocated\n");
     
     DPU_ASSERT(dpu_callback(*dpu_set_ptr,post_process,(void*)callback_data,DPU_CALLBACK_ASYNC));
-    //printf("callback done4\n");
+    // //printf("callback done4\n");
+    // DPU_FOREACH(*dpu_set_ptr, dpu) {
+    //     DPU_ASSERT(dpu_log_read(dpu, stdout));
+    // }
     dpu_sync(*dpu_set_ptr);
+
     //printf("sync done\n");
     /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {
         if(runtime_group[table_id].in_use >= runtime_group[table_id].length) {
             TIME_NOW(&end);
-            fprintf(stderr,
+            f//printf(stderr,
                 "ERROR: (runtime_group[%d].in_use) = %d >= runtime_group[%d].length = %d\n",
                 dpu_id, runtime_group[table_id].in_use, table_id, runtime_group[table_id].length);
             exit(1);
@@ -284,5 +339,11 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
         free(tmp_results[i]);
     }
     free(tmp_results); */
+
+    
+    // printf("C: Indices and offsets copying latency: %ldμs\n", ind_copy_lat);
+    // printf("C: Query copying latency: %ldμs\n", query_copy_lat);
+    // printf("C: Dpu launch latency: %ldμs\n", dpu_launch_lat);
+    // printf("C: Results copy latency: %ldμs\n", results_copy_lat);
     return 0;
 }
