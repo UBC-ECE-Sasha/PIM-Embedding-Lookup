@@ -312,10 +312,10 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     //printf("callback input allocated\n");
     
     DPU_ASSERT(dpu_callback(*dpu_set_ptr,post_process,(void*)callback_data,DPU_CALLBACK_ASYNC));
-    //printf("callback done4\n");
-    DPU_FOREACH(*dpu_set_ptr, dpu) {
-        DPU_ASSERT(dpu_log_read(dpu, stdout));
-    }
+    // //printf("callback done4\n");
+    // DPU_FOREACH(*dpu_set_ptr, dpu) {
+    //     DPU_ASSERT(dpu_log_read(dpu, stdout));
+    // }
     dpu_sync(*dpu_set_ptr);
 
     //printf("sync done\n");

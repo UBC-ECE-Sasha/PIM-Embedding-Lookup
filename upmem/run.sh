@@ -83,7 +83,7 @@ toy_env() {
     export NR_BATCHES=64
     export DPU_TEST=1
     export MAX_NR_BATCHES=64
-    export NR_TASKLETS=10
+    export NR_TASKLETS=14
     # rows?
 }
 

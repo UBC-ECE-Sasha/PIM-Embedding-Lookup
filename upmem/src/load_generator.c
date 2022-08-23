@@ -134,7 +134,7 @@ int main(){
 	synthetic_populate(50000,64,9);
 
 	printf("DEBUG: Done synthetic_populate(), starting synthetic_inference()...\n");
-	float** results=synthetic_inference(9,64,32,50000,64);
+	float** results=synthetic_inference(10,64,32,50000,64);
 	printf("DEBUG: Done synthetic_inference().\n");
 
 }

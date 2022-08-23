@@ -21,7 +21,7 @@ ifeq ($(DPU_TEST),1)
   NR_COLS             ?= 64
   NR_DPUS             = 640
 else
-  NR_COLS             ?= 64
+  NR_COLS             ?= 64   # Change this
   NR_DPUS             ?= 32
 endif
 
