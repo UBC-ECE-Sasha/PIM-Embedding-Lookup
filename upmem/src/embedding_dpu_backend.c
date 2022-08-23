@@ -111,6 +111,7 @@ embedding_dpu_map(embedding_info *emb_info, input_info *i_info) {
     DPU_ASSERT(dpu_alloc(nr_dpus, "nrJobsPerRank=256", &dpu_set));
     DPU_ASSERT(dpu_load(dpu_set, DPU_BINARY, NULL));
     {
+        DPU_ASSERT(dpu_get_nr_ranks(dpu_set, &(rank_mapping->nr_ranks)));
         {
             uint32_t rank_index = 0;
             rank_mapping->rank_nr_dpus = malloc(rank_mapping->nr_ranks * sizeof(uint32_t));
@@ -124,7 +125,6 @@ embedding_dpu_map(embedding_info *emb_info, input_info *i_info) {
                 total_dpus += rank_mapping->rank_nr_dpus[rank_index];
             }
         }
-        DPU_ASSERT(dpu_get_nr_ranks(dpu_set, &(rank_mapping->nr_ranks)));
 
         rank_mapping->rank_dpus_mapping =
             malloc(rank_mapping->nr_ranks * sizeof(embedding_dpu_mapping *));
