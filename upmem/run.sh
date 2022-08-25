@@ -99,7 +99,7 @@ random_run() {
 
 toy_run() {
     echo "DPU_TEST=${DPU_TEST}"
-    ./emb_host
+    ./emb
 }
 
 build_code() {
@@ -115,7 +115,7 @@ run_code() {
     if "${debug}"; then
         build_dir="./build/debug/"
     else
-        build_dir="./build/release/"
+        build_dir="./build/"
     fi
     cd "${build_dir}"
     "${dataset}_run"

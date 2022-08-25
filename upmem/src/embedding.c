@@ -9,7 +9,7 @@
 #include <time.h>
 
 /** @brief DPU binary path */
-#define DPU_BINARY "./build/embdpu"
+#define DPU_BINARY "../build/embdpu"
 
 /** @brief global referene to dpu_set */
 struct dpu_set_t dpu_set;
