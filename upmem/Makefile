@@ -1,168 +1,79 @@
-# Setting defaults
+.PHONY:all
 
-PROJECT             = emb_host
-PROJECT_LIB         = emblib.so
-EXE_DPU             ?= emb_dpu_lookup
-BUILD_DIR           ?= build
-NR_DPUS             ?= 32
-NR_TASKLETS         ?= 14
-COUNTER_CONFIG      ?= "COUNT_CYCLES"
-SHOW_DPU_LOGS       ?= 1
-MAX_ENC_BUFFER_MB   ?= 1
-NR_TABLES           ?= 8
-MAX_NR_BATCHES      ?= 32
-RT_CONFIG           ?= "ALL"
+# DPUs information
+NR_TASKLETS=16
 
-# TEST with c_test.py
-DPU_TEST            ?= 0
+# limits
+MAX_EMBEDDING_DIM=64
+MAX_NR_EMBEDDING=2000
+MAX_INDICES_PER_LOOKUP=160
+MAX_BATCH_SIZE=32
+MAX_INDICES_PER_LOOKUP_RAND=160
 
-ifeq ($(DPU_TEST),1)
-  NR_COLS             ?= 6
-  NR_DPUS             = 8
-else
-  NR_COLS             ?= 16
-  NR_DPUS             ?= 32
-endif
+# embedding information
+EMBEDDING_DIM=64
+EMBEDDING_DEPTH=500000
+NR_EMBEDDING=50
 
-# Version information
-VERSION             = 0.0.0
+# inputs information
+BATCH_SIZE=32
+INDICES_PER_LOOKUP=120
+RAND_INPUT_SIZE=0
 
-# Application sources and artifacts
-APP_BIN             = $(BUILD_DIR)/$(PROJECT)
-APP_LIB             = $(BUILD_DIR)/$(PROJECT_LIB)
-APP_SOURCES         =
-APP_MAIN            = src/emb_host.c
-APP_OBJS            = $(patsubst %.c,$(BUILD_DIR)/%.o,$(APP_SOURCES) $(APP_MAIN))
+# benchmark information
+NR_RUN=5
+CHECK_RESULTS=1
 
-# Includes
-INC                 = -Iinclude
+# CPU/DPU check rounding error margin
+CHECK_RESULT_ABSOLUTE_ROUNDING_ERROR_MARGIN=5000
 
-# Test sources and artifacts
-TEST_BIN            = $(BUILD_DIR)/$(PROJECT)_tests
-TEST_SOURCES        = $(APP_SOURCES) tests/main.c
-TEST_OBJS           = $(patsubst %.c,$(BUILD_DIR)/tests/%.o,$(TEST_SOURCES))
+build: build/bench build/embdpu
 
-# Generated dependency files
-DEPS                = $(APP_OBJS:.o=.d) \
-                      $(TEST_OBJS:.o=.d)
+build/bench: build/emblib
+	gcc -O3  -Wl,-rpath=build -Wall -mavx -msse4 -lm -lz -lpthread -L build/ -lemb -I include \
+		-DINDICES_PER_LOOKUP=${INDICES_PER_LOOKUP} \
+		-DEMBEDDING_DIM=${EMBEDDING_DIM} \
+		-DEMBEDDING_DEPTH=${EMBEDDING_DEPTH} \
+		-DNR_RUN=${NR_RUN} \
+		-DBATCH_SIZE=${BATCH_SIZE} \
+		-DNR_EMBEDDING=${NR_EMBEDDING} \
+		-o build/emb  synthetic_dataset_embedding.c  `dpu-pkg-config --cflags --libs dpu`
+    
+build/emblib: src/*.c include/*.h
+	mkdir -p build
+	gcc -O3 -Wall -mavx -msse4 -lm -lz -lpthread -I include \
+		-DINDICES_PER_LOOKUP=${INDICES_PER_LOOKUP} \
+		-DCHECK_RESULTS=${CHECK_RESULTS} \
+		-DRAND_INPUT_SIZE=${RAND_INPUT_SIZE} \
+		-DMAX_INDICES_PER_LOOKUP_RAND=${MAX_INDICES_PER_LOOKUP_RAND} \
+		-DMAX_NR_EMBEDDING=${MAX_NR_EMBEDDING} \
+		-DMAX_BATCH_SIZE=${MAX_BATCH_SIZE} \
+		-DCHECK_RESULT_ABSOLUTE_ROUNDING_ERROR_MARGIN=${CHECK_RESULT_ABSOLUTE_ROUNDING_ERROR_MARGIN} \
+		-shared -o build/libemb.so -fPIC src/*.c  `dpu-pkg-config --cflags --libs dpu` 
 
-# Compiler options
-CC                  = gcc
-COMMON_CFLAGS       = -lm --std=c11 -fPIC # -Wall -Wextra -MMD -Werror
-SHARED_CFLAGS       = -shared -Wl,-soname,$(PROJECT)
-DPU_OPTS            = `dpu-pkg-config --cflags --libs dpu`
+build/embdpu: src/dpu/*.c 
+	mkdir -p build
+	# TODO : why flto fails
+	dpu-clang -O3  -flto=thin -I include \
+		-DMAX_EMBEDDING_DIM=${MAX_EMBEDDING_DIM} \
+		-DNR_TASKLETS=${NR_TASKLETS} \
+		-DMAX_INDICES_PER_LOOKUP=${MAX_INDICES_PER_LOOKUP} \
+		-DMAX_BATCH_SIZE=${MAX_BATCH_SIZE} \
+		-o build/embdpu src/dpu/dpu_embedding.c
 
-# Tools
-CLANG_FORMAT        = clang-format
-
-# Debug/Release mode
-ifneq ($(DEBUG),)
-  COMMON_CFLAGS     += -g -DDEBUG
-  BUILD_DIR         := $(BUILD_DIR)/debug
-else
-  COMMON_CFLAGS     += -O3
-  BUILD_DIR         := $(BUILD_DIR)/release
-endif
-
-CFLAGS              += $(COMMON_CFLAGS) \
-                       -DVERSION=$(VERSION) \
-                       -DNR_DPUS=$(NR_DPUS) \
-                       -DNR_TASKLETS=$(NR_TASKLETS) \
-                       -DCOUNTER_CONFIG=$(COUNTER_CONFIG) \
-                       -DNR_TABLES=$(NR_TABLES) \
-                       -DNR_COLS=$(NR_COLS) \
-                       -DMAX_NR_BATCHES=$(MAX_NR_BATCHES) \
-                       -DHOST=1 \
-                       -DDPU_BINARY=\"dpu/$(EXE_DPU)\" \
-                       -DMAX_ENC_BUFFER_MB="$(MAX_ENC_BUFFER_MB)" \
-                       -D_POSIX_C_SOURCE=199309L # For clock_gettime
-
-# define SHOW_DPU_LOGS in the source if we want DPU logs
-ifeq ($(SHOW_DPU_LOGS), 1)
-	CFLAGS+=-DSHOW_DPU_LOGS
-endif
-
-# Silence make
-ifneq ($(V),)
-  SILENCE           =
-else
-  SILENCE           = @
-endif
-
-# Fancy output
-SHOW_COMMAND        := @printf "%-15s%s\n"
-SHOW_CC             := $(SHOW_COMMAND) "[ $(CC) ]"
-SHOW_CLEAN          := $(SHOW_COMMAND) "[ CLEAN ]"
-SHOW_GEN            := $(SHOW_COMMAND) "[ GEN ]"
-SHOW_MAKE           := $(SHOW_COMMAND) "[ MAKE ]"
-SHOW_FORMAT         := $(SHOW_COMMAND) "[ FORMAT ]"
-
-##############################################################################################
-# Default target and help message
-##############################################################################################
-DEFAULT_TARGET =  $(APP_BIN)
-
-all: $(DEFAULT_TARGET) $(APP_LIB) dpu
-.PHONY: all
-
-# Take care of compiler generated depedencies
--include $(DEPS)
-
-##############################################################################################
-# Application
-##############################################################################################
-$(APP_BIN): $(APP_OBJS)
-	$(SHOW_CC) $@
-	$(SILENCE)$(CC) -o $@ $(APP_OBJS) $(DPU_OPTS)
-
-$(APP_LIB): $(APP_OBJS)
-	$(SHOW_CC) $@
-	$(SILENCE)$(CC) -o $@ $(APP_OBJS) $(DPU_OPTS) $(SHARED_CFLAGS)
-
-$(BUILD_DIR)/%.o: %.c
-	$(SHOW_CC) $@
-	$(SILENCE)mkdir -p $(dir $@)
-	$(SILENCE)$(CC) $(CFLAGS) $(INC) -c $< -o $@ $(DPU_OPTS)
-
-##############################################################################################
-# DPU Application
-##############################################################################################
-
-export BUILD_DIR
-export DEBUG
-export NR_DPUS
-export NR_TASKLETS
-export COUNTER_CONFIG
-export EXE_DPU
-export NR_TABLES
-export NR_COLS
-export MAX_NR_BATCHES
-
-dpu:
-	$(SHOW_MAKE) $@
-	$(SILENCE)$(MAKE) -C src/dpu
-
-##############################################################################################
-# Tests
-##############################################################################################
-
-
-
-##############################################################################################
-# Cleanup
-##############################################################################################
 clean:
-	$(SHOW_CLEAN) $(BUILD_DIR)
-	$(SILENCE)rm -rf $(BUILD_DIR)
+	([ -d "build" ] && rm -r build/ && rm -f out.cpu.log out.dpu.log) || [ ! -d "build" ]
 
-.PHONY: clean
+testdpu: FORCE
+	./build/emb
 
-##############################################################################################
-# Format
-##############################################################################################
-format:
-	$(SHOW_FORMAT) $@
-	$(SILENCE)$(CLANG_FORMAT) -i src/*.c # src/*.h include/*.h
-	$(SILENCE)$(MAKE) format -C src/dpu
+tracedpu: FORCE
+	dpu-profiling functions -o dpu.json -a -A \
+		-f gather_rank_embedding_results \
+		-f build_synthetic_input_data \
+		-f synthetic_inference \
+		-f populate_mram \
+		-f lookup \
+		-- ./build/emb
 
-.PHONY: format
+FORCE: ;

@@ -32,23 +32,34 @@ dataset_valid() {
 }
 
 kaggle_env() {
-    export NR_TABLES=26
-    export NR_COLS=16
-    export MAX_NR_BATCHES=512
+    export NR_EMBEDDING=26
+    export EMBEDDING_DIM=16
+    export MAX_BATCH_SIZE=512
     export NR_TASKLETS=14
 }
 
 random_env() {
-    export NR_TABLES=10
-    export NR_COLS=64
-    export MAX_NR_BATCHES=128
+    export NR_EMBEDDING=9
+    export EMBEDDING_DIM=64
+    export MAX_BATCH_SIZE=64
     export NR_TASKLETS=14
 }
 
+# Old - pre-loadgenerator
+# toy_env() {
+#     export NR_EMBEDDING=1
+#     export EMBEDDING_DIM=8
+#     export DPU_TEST=1
+#     export NR_TASKLETS=1
+# }
 toy_env() {
-    export NR_COLS=8
+    export NR_EMBEDDING=9
+    export EMBEDDING_DIM=64
+    export BATCH_SIZE=64
     export DPU_TEST=1
-    export NR_TASKLETS=1
+    export MAX_BATCH_SIZE=64
+    export NR_TASKLETS=10
+    # rows?
 }
 
 global_env() {
@@ -74,13 +85,13 @@ kaggle_run() {
 
 random_run() {
     python3 "${cwd}/../PIM-dlrm-new/dlrm_dpu_pytorch.py" \
-           --arch-embedding-size=65000-65000-65000-65000-65000-65000-65000-65000-65000-65000 \
+           --arch-embedding-size=65000-65000-65000-65000-65000-65000-65000-65000-65000 \
            --arch-sparse-feature-size=64 \
            --arch-mlp-bot=1440-720-64 \
            --arch-mlp-top=40-20-10-1 \
            --data-generation=random \
-           --mini-batch-size=128 \
-           --num-batches=10 \
+           --mini-batch-size=64 \
+           --num-batches=100 \
            --num-indices-per-lookup=32 \
            --num-indices-per-lookup-fixed=True \
            --inference-only
@@ -88,7 +99,7 @@ random_run() {
 
 toy_run() {
     echo "DPU_TEST=${DPU_TEST}"
-    python3 "${cwd}/c_test.py"
+    ./emb_host
 }
 
 build_code() {
