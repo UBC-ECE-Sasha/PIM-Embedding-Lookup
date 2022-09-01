@@ -1,3 +1,6 @@
+#ifndef __EMB__
+#define __EMB__
+
 #include "common.h"
 #include "emb_types.h"
 #include "host/include/host.h"
@@ -110,3 +113,8 @@ free_dpu_backend();
 
 void
 alloc_dpu_backend();
+<<<<<<< HEAD
+=======
+
+#endif
+>>>>>>> 443b6dcc2c0cc07bace88599ceb3657638c01cff

@@ -9,7 +9,11 @@
 #include <time.h>
 
 /** @brief DPU binary path */
+<<<<<<< HEAD:upmem/src/embedding.c
 #define DPU_BINARY "../build/embdpu"
+=======
+#define DPU_BINARY "./build/embdpu"
+>>>>>>> 443b6dcc2c0cc07bace88599ceb3657638c01cff:upmem/src/embedding_dpu_backend.c
 
 /** @brief global referene to dpu_set */
 struct dpu_set_t dpu_set;
@@ -35,6 +39,7 @@ alloc_result_buffer(embedding_info *emb_info, input_info *i_info) {
 }
 
 /**
+<<<<<<< HEAD:upmem/src/embedding.c
  *  @brief alloc input info structure
  *  @param nr_embedding number of embedding
  *  @param nr_batches batch size (number of indice vector per batch)
@@ -72,6 +77,8 @@ alloc_embedding_info(uint32_t nr_embedding, uint32_t nr_rows, uint32_t nr_cols, 
 
 
 /**
+=======
+>>>>>>> 443b6dcc2c0cc07bace88599ceb3657638c01cff:upmem/src/embedding_dpu_backend.c
  * @brief free embedding rank mapping structure
  * @param rank_mapping embedding rank mapping structure
  */
@@ -112,8 +119,9 @@ embedding_dpu_map(embedding_info *emb_info, input_info *i_info) {
     printf("min nr cols per dpu %lu\n", min_col_per_dpu);
 
     /* check if the minimum number of column fit the MRAM EMB DATA SECTION */
-    assert("MRAM emb data too small" && nr_rows * sizeT * min_col_per_dpu < DPU_EMB_DATA_SIZE_BYTE);
-    nr_cols_per_dpu = DPU_EMB_DATA_SIZE_BYTE / (nr_rows * sizeT);
+    assert("MRAM emb data too small" &&
+           nr_rows * sizeT * min_col_per_dpu < MAX_DPU_EMB_TABLE_SIZE_BYTE);
+    nr_cols_per_dpu = MAX_DPU_EMB_TABLE_SIZE_BYTE / (nr_rows * sizeT);
     if (nr_cols_per_dpu > nr_cols)
         nr_cols_per_dpu = nr_cols;
 
@@ -132,8 +140,8 @@ embedding_dpu_map(embedding_info *emb_info, input_info *i_info) {
     emb_info->nr_embedding = nr_embedding;
     rank_mapping->nr_cols_per_dpu = nr_cols_per_dpu;
     rank_mapping->dpu_part_col = dpu_part_col;
-    printf("MRAM_SIZE %u DPU_EMB_DATA_SIZE_BYTE %lu nr cols per dpus %lu\n", MRAM_SIZE,
-           DPU_EMB_DATA_SIZE_BYTE, nr_cols_per_dpu);
+    printf("MRAM_SIZE %u MAX_DPU_EMB_TABLE_SIZE_BYTE %lu nr cols per dpus %lu\n", MRAM_SIZE,
+           MAX_DPU_EMB_TABLE_SIZE_BYTE, nr_cols_per_dpu);
     {
         uint32_t dpu_total_cols = 0;
         uint32_t embedding_index = 0;
@@ -431,8 +439,14 @@ gather_rank_embedding_results(struct dpu_set_t rank, uint32_t rank_index, void *
  *  @param dpu_result_buffer dpu_result_buffer
  */
 void
+<<<<<<< HEAD:upmem/src/embedding.c
 lookup(uint32_t **indices, uint32_t **offsets, uint64_t nr_embedding, uint64_t nr_cols,
        uint64_t nr_rows, int32_t **dpu_result_buffer) {
+=======
+lookup(uint32_t **indices, uint32_t **offsets, input_info *input_info,
+       embedding_rank_mapping *rank_mapping, uint64_t nr_embedding, uint64_t nr_cols,
+       uint64_t nr_rows, float **result_buffer, int32_t **dpu_result_buffer) {
+>>>>>>> 443b6dcc2c0cc07bace88599ceb3657638c01cff:upmem/src/embedding_dpu_backend.c
 
     uint32_t rank_index;
     uint32_t rank_dpu_index;

@@ -1,13 +1,13 @@
 CompileFlags:
   Add:
     [
-      -DMAX_INDEX_PER_BATCH=32,
-      -DMAX_NR_BATCHES=64,
-      -DNR_COLS=64,
-      -DNR_BATCHES=64,
+      -DMAX_INDICES_PER_LOOKUP=32,
+      -DMAX_BATCH_SIZE=64,
+      -DEMBEDDING_DIM=64,
+      -DBATCH_SIZE=64,
       -DNR_RUN=100,
-      -DINDEX_PER_BATCH=32,
-      -DNR_ROWS=50000,
+      -DMAX_INDICES_PER_LOOKUP=32,
+      -DEMBEDDING_DEPTH=50000,
       -DNR_EMBEDDING=9,
       -DNR_TASKLETS=16,
     ]

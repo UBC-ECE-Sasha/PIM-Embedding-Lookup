@@ -11,10 +11,10 @@
 
 __host uint64_t nr_cols;
 __mram_noinit struct query_len input_lengths;
-__mram_noinit int32_t emb_data[DPU_EMB_DATA_SIZE];
-__mram_noinit uint32_t input_indices[MAX_INDEX_PER_BATCH * MAX_NR_BATCHES];
-__mram_noinit uint32_t input_offsets[MAX_NR_BATCHES];
-__mram_noinit int32_t results[MAX_NR_BATCHES * MAX_NR_COLS_PER_DPU];
+__mram_noinit int32_t emb_data[MAX_DPU_EMB_TABLE_SIZE];
+__mram_noinit uint32_t input_indices[MAX_INDICES_PER_LOOKUP * MAX_BATCH_SIZE];
+__mram_noinit uint32_t input_offsets[MAX_BATCH_SIZE];
+__mram_noinit int32_t results[MAX_BATCH_SIZE * MAX_EMBEDDING_DIM];
 // #define PERFCOUNT
 #ifdef PERFCOUNT
 __host uint32_t counter_all, counter_init;
@@ -24,11 +24,11 @@ BARRIER_INIT(my_barrier, NR_TASKLETS);
 
 uint64_t indices_len;
 uint64_t nr_batches;
-__dma_aligned int32_t tmp_emb_data[NR_TASKLETS][MAX_NR_COLS_PER_DPU];
+__dma_aligned int32_t tmp_emb_data[NR_TASKLETS][MAX_EMBEDDING_DIM];
 __dma_aligned struct query_len lengths;
-__dma_aligned uint32_t indices[MAX_INDEX_PER_BATCH * MAX_NR_BATCHES];
-__dma_aligned uint32_t offsets[MAX_NR_BATCHES];
-__dma_aligned int32_t tmp_results[NR_TASKLETS][MAX_NR_COLS_PER_DPU];
+__dma_aligned uint32_t indices[MAX_INDICES_PER_LOOKUP * MAX_BATCH_SIZE];
+__dma_aligned uint32_t offsets[MAX_BATCH_SIZE];
+__dma_aligned int32_t tmp_results[NR_TASKLETS][MAX_EMBEDDING_DIM];
 
 int
 main() {

@@ -33,31 +33,31 @@ dataset_valid() {
 
 kaggle_env() {
     export NR_EMBEDDING=26
-    export NR_COLS=16
-    export MAX_NR_BATCHES=512
+    export EMBEDDING_DIM=16
+    export MAX_BATCH_SIZE=512
     export NR_TASKLETS=14
 }
 
 random_env() {
     export NR_EMBEDDING=9
-    export NR_COLS=64
-    export MAX_NR_BATCHES=64
+    export EMBEDDING_DIM=64
+    export MAX_BATCH_SIZE=64
     export NR_TASKLETS=14
 }
 
 # Old - pre-loadgenerator
 # toy_env() {
 #     export NR_EMBEDDING=1
-#     export NR_COLS=8
+#     export EMBEDDING_DIM=8
 #     export DPU_TEST=1
 #     export NR_TASKLETS=1
 # }
 toy_env() {
     export NR_EMBEDDING=9
-    export NR_COLS=64
-    export NR_BATCHES=64
+    export EMBEDDING_DIM=64
+    export BATCH_SIZE=64
     export DPU_TEST=1
-    export MAX_NR_BATCHES=64
+    export MAX_BATCH_SIZE=64
     export NR_TASKLETS=10
     # rows?
 }

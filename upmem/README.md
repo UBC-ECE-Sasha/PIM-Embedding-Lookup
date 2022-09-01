@@ -1,35 +1,64 @@
-cloud7 index 128, sans les -g
-BUGGY
+## WARNING
 
-# PIM
+batch size > 50 for one embedding is not supported because
+embedding DPU replication feature doesn't exists.
 
-## Building
+# TODO
 
-There are many custom parameters that can be set at compile time in `Makefile`.
+Embedding replication to support big batch size ( max 50 on DPU)
+but viewed > 50 from host side perspective thanks to Embedding Replication.
 
-For a "default" build, just run `make`
+## dpu embedding
 
-The compiled code will be located in `build/release`, and expects to be run from that directory.
+Embedding lookup table running on UPMEM PIM DPU.
+The design provides a library emblib.so and a testbench that perform
+functional validation and performances measurement (plus CPU backend comparaision)
+of the embedding lookup table DPU implementation, with synthetic table and synthetic
+input datas. 
 
-When a build is done with `DEBUG=1`, the code will be located in `build/debug`.
+## testbench flow
 
-## Convenience run and build script
-
-Rather than setting parameters every time, based on the data set used, the `run.sh` script can be used to build and/or run the code.
-
-```txt
-USAGE: ./run.sh
-        [ -b ] - Build code
-        [ -r ] - Run code
-        [ -d ] - Debug
-        [ -V ] - Verbose
-        <DATASET - kaggle | random | toy>
 ```
+     ____________________________________________
+    |   ______________                           |
+    |  |              |           (1)            |
+    |  | synthetic    |      intialization       | 
+    |  | lookup table |                          |
+    |  | generation   |      _______________     |
+    |  |______________|---->|               |    |
+    |   ___________         | populate DPUs |    |
+    |  |           |        | MRAM          |    |
+    |  | embedding |------->|_______________|    |
+    |  | tables    |                             |
+    |  | DPU pool  |                             |
+    |  | decoded   |                             |
+    |  |___________|                             |
+    |____________________________________________|
 
-The code can be compiled or run, or both at the same time (`-r` assumes you already built).
+     ____________________________________________
+    |   ______________                           |
+    |  |              |           (2)            |
+    |  | synthetic    |        inference         | 
+    |  | input batch  |                          |
+    |  | genereatio   |      _______________     |
+    |  |______________|---->|               |    |
+    |   _____________    |  | DPU lookup    |    |
+    |  |             |   |  |               |    |
+    |  | funtional   |<-----|_______________|    |
+    |  | validation  |   |                       |
+    |  |    +        |   |                       |
+    |  | perf        |   |    _______________    |
+    |  | measurement |   |-->|               |   |
+    |  |_____________|<------| CPU lookup    |   |
+    |                        |_______________|   | 
+    |____________________________________________|
 
-```shell script
-./run.sh -b toy      # build toy with debug
-./run.sh -r toy      # run toy
-./run.sh -brdd toy   # build and run toy with debug
+```
+## build
+```shell
+make clean && make
+```
+## run
+```shell
+make testdpu
 ```

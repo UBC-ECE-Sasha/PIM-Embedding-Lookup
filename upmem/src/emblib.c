@@ -10,9 +10,12 @@
 #include <stdlib.h>
 #include <time.h>
 
+<<<<<<< HEAD:upmem/src/synthetic_dataset_embedding.c
 /** @brief global static fifo pool structure */
 static struct FIFO_POOL *FIFO_POOL = NULL;
 
+=======
+>>>>>>> 443b6dcc2c0cc07bace88599ceb3657638c01cff:upmem/src/emblib.c
 /**
  *  @brief alloc synthetic embedding tables on HCPU side
  *  @param embedding_info information about embedding configuration
@@ -58,7 +61,7 @@ static int32_t cpt = 0;
 static int32_t sign = 1;
 void
 synthetic_populate(embedding_rank_mapping *rank_mapping, embedding_info *emb_info,
-                   int32_t **emb_tables) {
+                   input_info *i_info, int32_t **emb_tables) {
 
     uint64_t emb_data_type = CPT;
 
@@ -68,7 +71,7 @@ synthetic_populate(embedding_rank_mapping *rank_mapping, embedding_info *emb_inf
              embedding_index++) {
             /* synthetize random embedding table parameters */
             for (int i = 0; i < emb_info->nr_rows * emb_info->nr_cols; i++) {
-                double data_norm = (double) (rand()) / ((double) RAND_MAX + 1) / INDEX_PER_BATCH;
+                double data_norm = (double) (rand()) / ((double) RAND_MAX + 1) / i_info->nr_indexes;
                 emb_tables[embedding_index][i] = (int32_t) (INT32_MAX * data_norm);
             }
         }
@@ -78,7 +81,11 @@ synthetic_populate(embedding_rank_mapping *rank_mapping, embedding_info *emb_inf
             for (int i = 0; i < emb_info->nr_rows * emb_info->nr_cols; i++) {
                 emb_tables[embedding_index][i] = cpt * sign;
                 cpt++;
+<<<<<<< HEAD:upmem/src/synthetic_dataset_embedding.c
                 if ((float) (cpt) > (float) INT32_MAX / INDEX_PER_BATCH)
+=======
+                if ((float) (cpt) > (float) INT32_MAX / i_info->nr_indexes)
+>>>>>>> 443b6dcc2c0cc07bace88599ceb3657638c01cff:upmem/src/emblib.c
                     cpt = 0;
                 // printf("cpt %d\n", emb_tables[embedding_index][i]);
 
@@ -302,7 +309,28 @@ free_offset_buffer(uint32_t **offsets, uint64_t nr_embedding) {
     free(offsets);
 }
 
+<<<<<<< HEAD:upmem/src/synthetic_dataset_embedding.c
 
+=======
+/**
+ *  @brief alloc input info structure
+ *  @param nr_embedding number of embedding
+ *  @param nr_batches batch size (number of indice vector per batch)
+ *  @param indices_per_batch number of indices per indice vector
+ *  @return input info structure
+ */
+input_info *
+alloc_input_info(uint64_t nr_embedding, uint64_t nr_batches, uint64_t indices_per_lookup) {
+
+    struct input_info *info = malloc(sizeof(struct input_info));
+    info->nr_indexes = indices_per_lookup;
+    info->indices_len = (uint64_t *) malloc(MAX_NR_EMBEDDING * sizeof(uint64_t));
+    info->nr_batches = nr_batches;
+
+    return info;
+}
+
+>>>>>>> 443b6dcc2c0cc07bace88599ceb3657638c01cff:upmem/src/emblib.c
 /**
  *  @brief free input info structure
  *  @param info input info structure
@@ -350,20 +378,20 @@ free_embedding_info(embedding_info *emb_info) {
 void
 build_synthetic_input_size(struct input_info *input_info, uint32_t **indices_per_batch,
                            uint64_t nr_embedding, uint64_t nr_batches, uint64_t nr_rows) {
-    uint32_t index_per_batch;
+    uint32_t indices_per_lookup;
     for (uint64_t embedding_index = 0; embedding_index < nr_embedding; embedding_index++) {
 
         input_info->nr_batches = nr_batches;
         input_info->indices_len[embedding_index] = 0;
         for (uint64_t batch_index = 0; batch_index < nr_batches; batch_index++) {
 #if (RAND_INPUT_SIZE == 1)
-            double index_per_batch_norm = ((double) rand() / RAND_MAX);
-            index_per_batch = (uint32_t) (index_per_batch_norm * MAX_INDEX_PER_BATCH_RAND);
+            double indices_per_lookup_norm = ((double) rand() / RAND_MAX);
+            indices_per_lookup = (uint32_t) (indices_per_lookup_norm * INDICES_PER_LOOKUP_RAND);
 #else
-            index_per_batch = INDEX_PER_BATCH;
+            indices_per_lookup = INDICES_PER_LOOKUP;
 #endif
-            indices_per_batch[embedding_index][batch_index] = index_per_batch;
-            input_info->indices_len[embedding_index] += index_per_batch;
+            indices_per_batch[embedding_index][batch_index] = indices_per_lookup;
+            input_info->indices_len[embedding_index] += indices_per_lookup;
         }
     }
 }
@@ -452,10 +480,10 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, input_info *input_in
                      stop_process_time.tv_nsec - start_process_time.tv_nsec) /
             (1e6);
 
-        printf("[PERF] DPU CLOCK RAW time [ms]: %5.2f\n"
-               "[PERF] DPUTIME time [ms]: %5.2f\n"
-               "[PERF] DPU PROCESS ratio: %5.2f\n",
-               time, process_time, process_time / time * 100.0);
+        // printf("[PERF] DPU CLOCK RAW time [ms]: %5.2f\n"
+        //        "[PERF] DPUTIME time [ms]: %5.2f\n"
+        //        "[PERF] DPU PROCESS ratio: %5.2f\n",
+        //        time, process_time, process_time / time * 100.0);
 
         dpu_p_ratio += process_time / time * 100.0;
         dpu_time += time;
@@ -487,10 +515,10 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, input_info *input_in
                 (float) ((stop_process_time.tv_sec - start_process_time.tv_sec) * 1e9 +
                          stop_process_time.tv_nsec - start_process_time.tv_nsec) /
                 (1e6);
-            printf("[PERF] CPU CLOCK RAW time [ms]: %5.2f\n"
-                   "[PERF] CPUTIME time [ms]: %5.2f\n"
-                   "[PERF] CPU PROCESS ratio: %5.2f\n",
-                   time, process_time, process_time / time * 100.0);
+            // printf("[PERF] CPU CLOCK RAW time [ms]: %5.2f\n"
+            //        "[PERF] CPUTIME time [ms]: %5.2f\n"
+            //        "[PERF] CPU PROCESS ratio: %5.2f\n",
+            //        time, process_time, process_time / time * 100.0);
 
             cpu_p_ratio += process_time / time * 100.0;
             cpu_time += time;
@@ -514,13 +542,21 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, input_info *input_in
                             __attribute__((unused)) float diff;
 
                             diff = fabs(dpu_result * pow(10, 9) - host_result);
+<<<<<<< HEAD:upmem/src/synthetic_dataset_embedding.c
                             if (diff > 2000)
+=======
+                            if (diff > CHECK_RESULT_ABSOLUTE_ROUNDING_ERROR_MARGIN)
+>>>>>>> 443b6dcc2c0cc07bace88599ceb3657638c01cff:upmem/src/emblib.c
                                 printf("[%lu][%d][%d] diff: %f\tdpu_result: %f\thost_result: %f\n",
                                        embedding_index, batch_index, col_index, diff,
                                        dpu_result * pow(10, 9), host_result);
 
                             /* check magnitude with arbitrary threshold */
+<<<<<<< HEAD:upmem/src/synthetic_dataset_embedding.c
                             if (diff > 2000)
+=======
+                            if (diff > CHECK_RESULT_ABSOLUTE_ROUNDING_ERROR_MARGIN)
+>>>>>>> 443b6dcc2c0cc07bace88599ceb3657638c01cff:upmem/src/emblib.c
                                 valid = false;
                         }
                     }
@@ -541,6 +577,8 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, input_info *input_in
         printf("dpu [ms]: %lf\n", dpu_time_ms);
 #endif
     }
+<<<<<<< HEAD:upmem/src/synthetic_dataset_embedding.c
+=======
 }
 
 /**
@@ -560,9 +598,60 @@ alloc_cpu_result_buffer(embedding_info *emb_info, input_info *i_info) {
         }
     }
     return cpu_buffer;
+>>>>>>> 443b6dcc2c0cc07bace88599ceb3657638c01cff:upmem/src/emblib.c
 }
 
 /**
+ * @brief allocate cpu result buffer
+<<<<<<< HEAD:upmem/src/synthetic_dataset_embedding.c
+ * @param emb_info embedding info structure
+ * @param i_info input info structure
+ * @return buffer
+ */
+float ***
+alloc_cpu_result_buffer(embedding_info *emb_info, input_info *i_info) {
+
+    float ***cpu_buffer = (float ***) malloc(emb_info->nr_embedding * sizeof(float **));
+=======
+ * @param buffer cpu result buffer
+ * @param emb_info embedding info structure
+ * @param i_info input info structure
+ */
+void
+free_cpu_result_buffer(float ***buffer, embedding_info *emb_info, input_info *i_info) {
+
+    for (uint64_t k = 0; k < emb_info->nr_embedding; k++) {
+        for (uint64_t j = 0; j < i_info->nr_batches; j++) {
+            free(buffer[k][j]);
+        }
+    }
+    for (uint64_t k = 0; k < emb_info->nr_embedding; k++) {
+        free(buffer[k]);
+    }
+    free(buffer);
+}
+
+/**
+ * @brief allocate DPU formated result buffer
+ * @param emb_info embedding info structure
+ * @param i_info input info structure
+ * @return buffer
+ */
+float **
+alloc_result_buffer(embedding_info *emb_info, input_info *i_info) {
+    float **result_buffer = (float **) malloc(emb_info->nr_embedding * sizeof(float *));
+>>>>>>> 443b6dcc2c0cc07bace88599ceb3657638c01cff:upmem/src/emblib.c
+    for (uint64_t k = 0; k < emb_info->nr_embedding; k++) {
+        cpu_buffer[k] = (float **) malloc(i_info->nr_batches * sizeof(float *));
+        for (uint64_t j = 0; j < i_info->nr_batches; j++) {
+            cpu_buffer[k][j] = (float *) malloc(emb_info->nr_cols * sizeof(float));
+        }
+    }
+    return cpu_buffer;
+}
+
+/**
+<<<<<<< HEAD:upmem/src/synthetic_dataset_embedding.c
  * @brief allocate cpu result buffer
  * @param buffer cpu result buffer
  * @param emb_info embedding info structure
@@ -584,6 +673,8 @@ free_cpu_result_buffer(float ***buffer, embedding_info *emb_info, input_info *i_
 
 
 /**
+=======
+>>>>>>> 443b6dcc2c0cc07bace88599ceb3657638c01cff:upmem/src/emblib.c
  * @brief free DPU formated result buffer
  * @param buffer cpu result buffer
  * @param nr_embedding number of embedding
@@ -630,6 +721,7 @@ free_dpu_result_buffer(uint32_t nr_dpus, int32_t **dpu_result_buffer) {
     }
     free(dpu_result_buffer);
 }
+<<<<<<< HEAD:upmem/src/synthetic_dataset_embedding.c
 
 #define THREAD_POOL_NR_THREAD 1
 struct THREAD_POOL {
@@ -861,3 +953,5 @@ main() {
     free_embedding_info(emb_info);
     free_input_info(i_info);
 }
+=======
+>>>>>>> 443b6dcc2c0cc07bace88599ceb3657638c01cff:upmem/src/emblib.c
