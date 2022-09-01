@@ -302,23 +302,6 @@ free_offset_buffer(uint32_t **offsets, uint64_t nr_embedding) {
     free(offsets);
 }
 
-/**
- *  @brief alloc input info structure
- *  @param nr_embedding number of embedding
- *  @param nr_batches batch size (number of indice vector per batch)
- *  @param indices_per_batch number of indices per indice vector
- *  @return input info structure
- */
-input_info *
-alloc_input_info(uint64_t nr_embedding, uint64_t nr_batches, uint64_t index_per_batch) {
-
-    struct input_info *info = malloc(sizeof(struct input_info));
-    info->nr_indexes = index_per_batch;
-    info->indices_len = (uint64_t *) malloc(MAX_NR_EMBEDDING * sizeof(uint64_t));
-    info->nr_batches = nr_batches;
-
-    return info;
-}
 
 /**
  *  @brief free input info structure
@@ -599,21 +582,6 @@ free_cpu_result_buffer(float ***buffer, embedding_info *emb_info, input_info *i_
     free(buffer);
 }
 
-/**
- * @brief allocate DPU formated result buffer
- * @param emb_info embedding info structure
- * @param i_info input info structure
- * @return buffer
- */
-float **
-alloc_result_buffer(embedding_info *emb_info, input_info *i_info) {
-    float **result_buffer = (float **) malloc(emb_info->nr_embedding * sizeof(float *));
-    for (uint64_t k = 0; k < emb_info->nr_embedding; k++) {
-        result_buffer[k] =
-            (float *) malloc(i_info->nr_batches * emb_info->nr_cols * sizeof(uint32_t));
-    }
-    return result_buffer;
-}
 
 /**
  * @brief free DPU formated result buffer

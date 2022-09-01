@@ -13,6 +13,63 @@
 
 /** @brief global referene to dpu_set */
 struct dpu_set_t dpu_set;
+struct embedding_rank_mapping *rank_mapping;
+struct embedding_info *emb_info;
+struct input_info *i_info;
+float **result_buffer;
+
+/**
+ * @brief allocate DPU formated result buffer
+ * @param emb_info embedding info structure
+ * @param i_info input info structure
+ * @return buffer
+ */
+float **
+alloc_result_buffer(embedding_info *emb_info, input_info *i_info) {
+    float **result_buffer = (float **) malloc(emb_info->nr_embedding * sizeof(float *));
+    for (uint64_t k = 0; k < emb_info->nr_embedding; k++) {
+        result_buffer[k] =
+            (float *) malloc(i_info->nr_batches * emb_info->nr_cols * sizeof(uint32_t));
+    }
+    return result_buffer;
+}
+
+/**
+ *  @brief alloc input info structure
+ *  @param nr_embedding number of embedding
+ *  @param nr_batches batch size (number of indice vector per batch)
+ *  @param indices_per_batch number of indices per indice vector
+ *  @return input info structure
+ */
+input_info *
+alloc_input_info(uint64_t nr_embedding, uint64_t nr_batches, uint64_t index_per_batch) {
+
+    struct input_info *info = malloc(sizeof(struct input_info));
+    info->nr_indexes = index_per_batch;
+    info->indices_len = (uint64_t *) malloc(MAX_NR_EMBEDDING * sizeof(uint64_t));
+    info->nr_batches = nr_batches;
+
+    return info;
+}
+
+/**
+ *  @brief allocate embedding info structure
+ *  @param nr_embedding number of embedding
+ *  @param nr_rows number of rows for each embedding
+ *  @param nr_cols number of cols for each embedding
+ *  @param sizeT embedding data size (byte)
+ *  @return embedding info structure
+ */
+embedding_info *
+alloc_embedding_info(uint32_t nr_embedding, uint32_t nr_rows, uint32_t nr_cols, uint32_t sizeT) {
+    embedding_info *emb_info = malloc(sizeof(embedding_info));
+    emb_info->nr_embedding = nr_embedding;
+    emb_info->nr_rows = nr_rows;
+    emb_info->nr_cols = nr_cols;
+    emb_info->sizeT = sizeT;
+    return emb_info;
+}
+
 
 /**
  * @brief free embedding rank mapping structure
@@ -201,15 +258,20 @@ embedding_dpu_map(embedding_info *emb_info, input_info *i_info) {
  *  @param embedding_tables embedding tables buffer
  */
 void
-populate_mram(embedding_rank_mapping *rank_mapping, embedding_info *emb_info,
-              int32_t **emb_tables) {
+populate_mram(uint32_t nr_cols, uint32_t nr_rows, uint32_t nr_cols_per_dpu, uint32_t nr_embedding,
+              uint32_t nr_batches, uint32_t index_per_batch, int32_t **emb_tables) {
 
-    uint64_t sizeT = emb_info->sizeT;
+    uint32_t sizeT=sizeof(uint32_t);
+    emb_info=alloc_embedding_info(nr_embedding, nr_rows, nr_cols, sizeT);
+    i_info=alloc_input_info(nr_embedding, nr_batches, index_per_batch);
+    rank_mapping=embedding_dpu_map(emb_info, *i_info);
+
     uint32_t nr_dpus = rank_mapping->nr_dpus;
-    uint32_t nr_cols = emb_info->nr_cols;
     uint32_t nr_rows = emb_info->nr_rows;
     uint32_t nr_cols_per_dpu = rank_mapping->nr_cols_per_dpu;
     uint32_t dpu_part_col = rank_mapping->dpu_part_col;
+
+    result_buffer=alloc_result_buffer(emb_info, i_info);
     /* allocates ant creates transpose embeding matrix of parameters */
     int32_t **buffer_data;
     buffer_data = (int32_t **) (malloc(nr_dpus * sizeof(int32_t *)));
@@ -369,9 +431,8 @@ gather_rank_embedding_results(struct dpu_set_t rank, uint32_t rank_index, void *
  *  @param dpu_result_buffer dpu_result_buffer
  */
 void
-lookup(uint32_t **indices, uint32_t **offsets, input_info *input_info,
-       embedding_rank_mapping *rank_mapping, uint64_t nr_embedding, uint64_t nr_cols,
-       uint64_t nr_rows, float **result_buffer, int32_t **dpu_result_buffer) {
+lookup(uint32_t **indices, uint32_t **offsets, uint64_t nr_embedding, uint64_t nr_cols,
+       uint64_t nr_rows, int32_t **dpu_result_buffer) {
 
     uint32_t rank_index;
     uint32_t rank_dpu_index;
@@ -381,12 +442,12 @@ lookup(uint32_t **indices, uint32_t **offsets, input_info *input_info,
 
     uint64_t sizeT = sizeof(int32_t);
 
-    uint32_t max_nr_batches = input_info->nr_batches;
+    uint32_t max_nr_batches = i_info->nr_batches;
     uint32_t max_indices_len = 0;
 
     for (uint64_t emb_index = 0; emb_index < nr_embedding; emb_index++) {
-        if (max_indices_len < input_info->indices_len[emb_index])
-            max_indices_len = input_info->indices_len[emb_index];
+        if (max_indices_len < i_info->indices_len[emb_index])
+            max_indices_len = i_info->indices_len[emb_index];
     }
 
     DPU_RANK_FOREACH(dpu_set, rank, rank_index) {
@@ -421,8 +482,8 @@ lookup(uint32_t **indices, uint32_t **offsets, input_info *input_info,
         DPU_FOREACH(rank, dpu, rank_dpu_index) {
             uint64_t emb_index =
                 rank_mapping->rank_dpus_mapping[rank_index][rank_dpu_index].embedding_index;
-            lengths[emb_index].indices_len = input_info->indices_len[emb_index];
-            lengths[emb_index].nr_batches = input_info->nr_batches;
+            lengths[emb_index].indices_len = i_info->indices_len[emb_index];
+            lengths[emb_index].nr_batches = i_info->nr_batches;
             DPU_ASSERT(dpu_prepare_xfer(dpu, &lengths[emb_index]));
         }
     }
