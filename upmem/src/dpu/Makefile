@@ -51,7 +51,8 @@ CFLAGS              += $(COMMON_CFLAGS) \
                        -DCOUNTER_CONFIG=$(COUNTER_CONFIG) \
                        -DNR_TABLES=$(NR_TABLES) \
                        -DNR_COLS=$(NR_COLS) \
-                       -DMAX_NR_BATCHES=$(MAX_NR_BATCHES)
+                       -DMAX_NR_BATCHES=$(MAX_NR_BATCHES) \
+                       -DMAX_INDICES_PER_BATCH=$(MAX_INDICES_PER_BATCH)
 
 
 # Silence make

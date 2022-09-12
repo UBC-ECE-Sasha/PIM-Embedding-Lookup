@@ -37,13 +37,13 @@ kaggle_env() {
     export MAX_NR_BATCHES=512
     export NR_TASKLETS=14
 }
-
-build_pytorch=false
+build_pytorch=true
 random_env() {
-    export NR_TABLES=10
+    export NR_TABLES=20
     export NR_COLS=64
-    export MAX_NR_BATCHES=64
+    export MAX_NR_BATCHES=16
     export NR_TASKLETS=14
+    export MAX_INDICES_PER_BATCH=16
 }
 
 random_run() {
@@ -57,15 +57,15 @@ random_run() {
         echo "skipping pytorch build"
     fi
     cd "${cwd}/${build_dir}"
-    python3 "${cwd}/../PIM-dlrm-new/dlrm_dpu_pytorch.py" \
-           --arch-embedding-size=65000-65000-65000-65000-65000-65000-65000-65000-65000-65000 \
+    python3 "${cwd}/../PIM-dlrm-new/dlrm_s_pytorch.py" \
+           --arch-embedding-size=100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000 \
            --arch-sparse-feature-size="${NR_COLS}" \
            --arch-mlp-bot=1440-720-"${NR_COLS}" \
            --arch-mlp-top=40-20-10-1 \
            --data-generation=random \
            --mini-batch-size="${MAX_NR_BATCHES}" \
            --num-batches=100 \
-           --num-indices-per-lookup=32 \
+           --num-indices-per-lookup="${MAX_INDICES_PER_BATCH}" \
            --num-indices-per-lookup-fixed=True \
            --inference-only
 }

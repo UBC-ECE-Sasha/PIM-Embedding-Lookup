@@ -240,7 +240,7 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
 
     // long ind_copy_lat;
     // TIME_NOW(&start);
-    //printf("After first gettimeofday()");
+
     //if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
     DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
         DPU_ASSERT(dpu_prepare_xfer(dpu,indices[(int)(dpu_id/NR_COLS)]));
@@ -274,7 +274,7 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
 
     // TIME_NOW(&end);
     // query_copy_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
-
+// 
     // long dpu_launch_lat;
     // TIME_NOW(&start);
 
@@ -305,6 +305,9 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     // TIME_NOW(&end);
     // results_copy_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
     
+    // long callback_prep_lat;
+    // TIME_NOW(&start);
+
     struct callback_input *callback_data=(struct callback_input*)malloc(sizeof(struct callback_input));
     callback_data->final_results=final_results;
     callback_data->nr_batches=nr_batches;
@@ -316,7 +319,18 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     // DPU_FOREACH(*dpu_set_ptr, dpu) {
     //     DPU_ASSERT(dpu_log_read(dpu, stdout));
     // }
+
+    // TIME_NOW(&end);
+    // callback_prep_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
+    
+    // long wait_sync_lat;
+    // TIME_NOW(&start);
+
     dpu_sync(*dpu_set_ptr);
+
+    // TIME_NOW(&end);
+    // wait_sync_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
+    
 
     //printf("sync done\n");
     /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {
@@ -345,5 +359,7 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, uint32_t* indices_len,
     // printf("C: Query copying latency: %ldμs\n", query_copy_lat);
     // printf("C: Dpu launch latency: %ldμs\n", dpu_launch_lat);
     // printf("C: Results copy latency: %ldμs\n", results_copy_lat);
+    // printf("C: Callback prep latency: %ldμs\n", callback_prep_lat);
+    // printf("C: DPU sync latency: %ldμs\n", wait_sync_lat);
     return 0;
 }
