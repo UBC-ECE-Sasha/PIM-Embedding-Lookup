@@ -86,6 +86,7 @@ embedding_dpu_map(embedding_info *emb_info, input_info *i_info) {
     rank_mapping->dpu_part_col = dpu_part_col;
     printf("MRAM_SIZE %u MAX_DPU_EMB_TABLE_SIZE_BYTE %lu nr cols per dpus %lu\n", MRAM_SIZE,
            MAX_DPU_EMB_TABLE_SIZE_BYTE, nr_cols_per_dpu);
+    /* The code below is used to compute the required number of DPUs */
     {
         uint32_t dpu_total_cols = 0;
         uint32_t embedding_index = 0;
@@ -414,7 +415,7 @@ lookup(uint32_t **indices, uint32_t **offsets, input_info *input_info,
         }
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, "input_indices", 0,
-                             ALIGN(max_indices_len * sizeof(uint32_t), 8), DPU_XFER_DEFAULT));
+                             ALIGN(max_indices_len * sizeof(uint32_t), 8), DPU_XFER_ASYNC));
 
     DPU_RANK_FOREACH(dpu_set, rank, rank_index) {
         DPU_FOREACH(rank, dpu, rank_dpu_index) {
@@ -424,7 +425,7 @@ lookup(uint32_t **indices, uint32_t **offsets, input_info *input_info,
         }
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, "input_offsets", 0,
-                             ALIGN(max_nr_batches * sizeof(uint32_t), 8), DPU_XFER_DEFAULT));
+                             ALIGN(max_nr_batches * sizeof(uint32_t), 8), DPU_XFER_ASYNC));
 
     DPU_RANK_FOREACH(dpu_set, rank, rank_index) {
         DPU_FOREACH(rank, dpu, rank_dpu_index) {
@@ -437,8 +438,8 @@ lookup(uint32_t **indices, uint32_t **offsets, input_info *input_info,
     }
 
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_TO_DPU, "input_lengths", 0, sizeof(struct query_len),
-                             DPU_XFER_DEFAULT));
-    DPU_ASSERT(dpu_launch(dpu_set, DPU_SYNCHRONOUS));
+                             DPU_XFER_ASYNC));
+    DPU_ASSERT(dpu_launch(dpu_set, DPU_ASYNCHRONOUS));
 #if (PERFCOUNT == 1)
     {
         uint32_t dpu_index;
@@ -466,7 +467,7 @@ lookup(uint32_t **indices, uint32_t **offsets, input_info *input_info,
     }
     DPU_ASSERT(dpu_push_xfer(dpu_set, DPU_XFER_FROM_DPU, "results", 0,
                              ALIGN(sizeT * max_nr_batches * rank_mapping->nr_cols_per_dpu, 8),
-                             DPU_XFER_DEFAULT));
+                             DPU_XFER_ASYNC));
 
     callback_data->nr_cols = nr_cols;
     callback_data->nr_rows = nr_rows;
