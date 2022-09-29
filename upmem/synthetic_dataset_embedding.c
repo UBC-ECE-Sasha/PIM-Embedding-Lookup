@@ -14,6 +14,7 @@
 #define THREAD_POOL_NR_THREAD 1
 struct THREAD_POOL {
     pthread_t th[THREAD_POOL_NR_THREAD];
+    struct pipeline_args *pargs;
 } THREAD_POOL;
 
 #define STAGE_0_DEPTH 2
@@ -153,14 +154,14 @@ thread_mege_results(void *argv) {
 void
 INIT_THREAD_POOL(struct THREAD_POOL *this, embedding_rank_mapping *rank_mapping_info,
                  embedding_info *emb_info, input_info *i_info) {
-    struct pipeline_args *pargs = (struct pipeline_args *) malloc(sizeof(struct pipeline_args));
-    pargs->rank_mapping_info = rank_mapping_info;
-    pargs->emb_info = emb_info;
-    pargs->i_info = i_info;
+    this->pargs = (struct pipeline_args *) malloc(sizeof(struct pipeline_args));
+    this->pargs->rank_mapping_info = rank_mapping_info;
+    this->pargs->emb_info = emb_info;
+    this->pargs->i_info = i_info;
     /* index on current thread to of THREAD_POOL structure */
     uint64_t thread_pool_index = 0;
     pthread_create(&(this->th[thread_pool_index++]), NULL, thread_build_sythetic_data,
-                   (void *) pargs);
+                   (void *) this->pargs);
 }
 
 /**
@@ -171,6 +172,7 @@ void
 JOIN_THREAD_POOL(struct THREAD_POOL *this) {
     for (uint64_t i = 0; i < THREAD_POOL_NR_THREAD; i++)
         pthread_join(this->th[i], NULL);
+    free(this->pargs);
 }
 
 /** @brief perform DPU/CPU benchmark of embedding tables */
