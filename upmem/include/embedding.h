@@ -104,7 +104,7 @@ dpu_error_t
 post_process(struct dpu_set_t dpu_rank, uint64_t rank_id, void *arg);
 
 void
-lookup(uint32_t **indices, uint32_t **offsets, struct input_info *input_info,
+lookup(uint32_t **indices, struct query_len *lengths, uint32_t **offsets, struct input_info *input_info,
        embedding_rank_mapping *rank_mapping_info, uint64_t nr_embedding, uint64_t nr_cols,
        uint64_t nr_rows, float **result_buffer, int32_t **dpu_result_buffer);
 

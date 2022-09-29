@@ -379,7 +379,7 @@ gather_rank_embedding_results(struct dpu_set_t rank, uint32_t rank_index, void *
  *  @param dpu_result_buffer dpu_result_buffer
  */
 void
-lookup(uint32_t **indices, uint32_t **offsets, input_info *input_info,
+lookup(uint32_t **indices, struct query_len *lengths, uint32_t **offsets, input_info *input_info,
        embedding_rank_mapping *rank_mapping, uint64_t nr_embedding, uint64_t nr_cols,
        uint64_t nr_rows, float **result_buffer, int32_t **dpu_result_buffer) {
 
@@ -387,7 +387,6 @@ lookup(uint32_t **indices, uint32_t **offsets, input_info *input_info,
     uint32_t rank_dpu_index;
     struct dpu_set_t dpu;
     struct dpu_set_t rank;
-    struct query_len *lengths = malloc(nr_embedding * sizeof(struct query_len));
 
     uint64_t sizeT = sizeof(int32_t);
 
@@ -477,7 +476,6 @@ lookup(uint32_t **indices, uint32_t **offsets, input_info *input_info,
     callback_data->rank_mapping_info = rank_mapping;
     DPU_ASSERT(
         dpu_callback(dpu_set, gather_rank_embedding_results, callback_data, DPU_CALLBACK_DEFAULT));
-    free(lengths);
 }
 
 /** @brief allocate DPU backend */

@@ -446,6 +446,8 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, input_info *input_in
     double cpu_p_ratio = 0, dpu_p_ratio = 0;
     double cpu_time = 0, dpu_time = 0;
     uint64_t multi_run = 20;
+    struct query_len *lengths = malloc(nr_embedding * sizeof(struct query_len));
+
     for (int i = 0; i < multi_run; i++) {
 
         struct timespec start_time, start_process_time, stop_time, stop_process_time;
@@ -453,7 +455,7 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, input_info *input_in
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_process_time);
 
         /* inference */
-        lookup(indices, offsets, input_info, rank_mapping_info, nr_embedding, nr_cols, nr_rows,
+        lookup(indices, lengths, offsets, input_info, rank_mapping_info, nr_embedding, nr_cols, nr_rows,
                result_buffer, dpu_result_buffer);
         clock_gettime(CLOCK_MONOTONIC_RAW, &stop_time);
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &stop_process_time);
@@ -474,6 +476,9 @@ synthetic_inference(uint32_t **indices, uint32_t **offsets, input_info *input_in
         dpu_p_ratio += process_time / time * 100.0;
         dpu_time += time;
     }
+
+    free(lengths);
+
     double dpu_time_ms = dpu_time / multi_run;
 
     {
