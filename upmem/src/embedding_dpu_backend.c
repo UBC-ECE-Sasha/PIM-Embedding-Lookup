@@ -42,12 +42,24 @@ embedding_dpu_map(embedding_info *emb_info, input_info *i_info) {
     uint64_t nr_cols = emb_info->nr_cols;
 
     uint64_t nr_dpus = 0;
-    uint32_t sizeT = sizeof(int32_t);
+    uint32_t sizeT = DATA_SIZE_BYTE;
+    emb_info->sizeT = sizeT;
 
     embedding_rank_mapping *rank_mapping = malloc(sizeof(embedding_rank_mapping));
 
     uint64_t nr_cols_per_dpu;
 
+    /* Here we are performing alignement of the minimum number of
+     * columns to ensure DPU MRAM alignement and 64 bits minimum transfer
+     *
+     * Each DPU read of Embedding table is perfomed on a complete line
+     * (eg : 2 column per DPU, datatype = int32_t ->  DPU read size = 2 * 4 = 8 Byte : OK
+     *       1 column per DPU, datatype = int32_t ->  DPU read size = 1 * 4 = 4 Byte : KO
+     *       2 column per DPU, datatype = int16_t ->  DPU read size = 2 * 2 = 4 Byte : KO
+     *       2 column per DPU, datatype = int16_t ->  DPU read size = 2 * 2 = 4 Byte : KO
+     *       4 column per DPU, datatype = int16_t ->  DPU read size = 2 * 4 = 8 Byte : KO
+     *  )
+     */
     uint64_t min_col_per_dpu = 1;
     while (min_col_per_dpu * sizeT % 8)
         min_col_per_dpu++;
@@ -70,10 +82,6 @@ embedding_dpu_map(embedding_info *emb_info, input_info *i_info) {
     uint64_t dpu_part_col = nr_cols % nr_cols_per_dpu;
     printf("nr cols per dpus %lu, dpu part col %lu\n", nr_cols_per_dpu, dpu_part_col);
 
-    emb_info->sizeT = sizeT;
-    emb_info->nr_cols = nr_cols;
-    emb_info->nr_rows = nr_rows;
-    emb_info->nr_embedding = nr_embedding;
     rank_mapping->nr_cols_per_dpu = nr_cols_per_dpu;
     rank_mapping->dpu_part_col = dpu_part_col;
     printf("MRAM_SIZE %u MAX_DPU_EMB_TABLE_SIZE_BYTE %lu nr cols per dpus %lu\n", MRAM_SIZE,
@@ -108,7 +116,7 @@ embedding_dpu_map(embedding_info *emb_info, input_info *i_info) {
 
     printf("nr_dpus %lu\n", nr_dpus);
 
-    DPU_ASSERT(dpu_alloc(nr_dpus, "nrJobsPerRank=256", &dpu_set));
+    DPU_ASSERT(dpu_alloc(nr_dpus, 0, &dpu_set));
     DPU_ASSERT(dpu_load(dpu_set, DPU_BINARY, NULL));
     {
         DPU_ASSERT(dpu_get_nr_ranks(dpu_set, &(rank_mapping->nr_ranks)));
