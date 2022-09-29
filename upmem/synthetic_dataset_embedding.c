@@ -125,7 +125,7 @@ thread_build_sythetic_data(void *argv) {
         FIFO_PUSH_RELEASE(*OUTPUT_FIFO);
     }
 
-    for (uint64_t batch_index = 0; batch_index < BATCH_SIZE; batch_index++)
+    for (uint64_t batch_index = 0; batch_index < NR_EMBEDDING; batch_index++)
         free(indices_per_batch[batch_index]);
     free(indices_per_batch);
 
