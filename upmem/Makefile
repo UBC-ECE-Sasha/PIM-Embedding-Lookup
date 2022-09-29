@@ -69,11 +69,11 @@ testdpu: FORCE
 
 tracedpu: FORCE
 	dpu-profiling functions -o dpu.json -a -A \
-		-f gather_rank_embedding_results \
 		-f build_synthetic_input_data \
 		-f synthetic_inference \
-		-f populate_mram \
-		-f lookup \
+		--external-function  ./build/libemb.so:lookup \
+		--external-function  ./build/libemb.so:populate_mram \
+		--external-function  ./build/libemb.so:gather_rank_embedding_results \
 		-- ./build/emb
 
 FORCE: ;
