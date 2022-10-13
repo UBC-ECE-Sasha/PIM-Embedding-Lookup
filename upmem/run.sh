@@ -99,8 +99,8 @@ random_run() {
 
 toy_run() {
     echo "DPU_TEST=${DPU_TEST}"
-    ls
-    ./emb
+    cd ..
+    ./build/emb
 }
 
 build_code() {
