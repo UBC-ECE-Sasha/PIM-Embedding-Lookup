@@ -9,9 +9,9 @@ NR_TASKLETS         ?= 14
 COUNTER_CONFIG      ?= "COUNT_CYCLES"
 SHOW_DPU_LOGS       ?= 1
 MAX_ENC_BUFFER_MB   ?= 1
-NR_TABLES           ?= 3
-MAX_NR_BATCHES      ?= 128
-MAX_INDICES_PER_BATCH ?=32
+NR_TABLES           ?= 10
+MAX_NR_BATCHES      ?= 64
+MAX_INDICES_PER_BATCH ?= 64
 RT_CONFIG           ?= "ALL"
 
 # TEST with c_test.py
@@ -21,8 +21,8 @@ ifeq ($(DPU_TEST),1)
   NR_COLS             ?= 64
   NR_DPUS             = 640
 else
-  NR_COLS             ?= 64
-  NR_DPUS             ?= 32
+  NR_COLS             ?= 64   # Change this
+  NR_DPUS             ?= 640
 endif
 
 # Version information
