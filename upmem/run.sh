@@ -39,11 +39,11 @@ kaggle_env() {
 }
 build_pytorch=false
 random_env() {
-    export NR_TABLES=10
+    export NR_TABLES=32
     export NR_COLS=64
-    export MAX_NR_BATCHES=64
+    export MAX_NR_BATCHES=100
     export NR_TASKLETS=14
-    export MAX_INDICES_PER_BATCH=64
+    export MAX_INDICES_PER_BATCH=120
 }
 
 random_run() {
@@ -57,19 +57,18 @@ random_run() {
         echo "skipping pytorch build"
     fi
     cd "${cwd}/${build_dir}"
-    python3 "${cwd}/../PIM-dlrm-new/dlrm_dpu_pytorch.py" \
-           --arch-embedding-size=100000-100000-100000-100000-100000-100000-100000-100000-100000-100000 \
+    python3 "${cwd}/../PIM-dlrm-new/dlrm_s_pytorch.py" \
+           --arch-embedding-size=500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000 \
            --arch-sparse-feature-size="${NR_COLS}" \
-           --arch-mlp-bot=1440-720-"${NR_COLS}" \
-           --arch-mlp-top=40-20-10-1 \
+           --arch-mlp-bot=256-128-"${NR_COLS}" \
+           --arch-mlp-top=128-64-1 \
            --data-generation=random \
            --mini-batch-size="${MAX_NR_BATCHES}" \
-           --num-batches=100 \
+           --num-batches=20 \
            --num-indices-per-lookup="${MAX_INDICES_PER_BATCH}" \
            --num-indices-per-lookup-fixed=True \
            --inference-only
 }
-
 # Old - pre-loadgenerator
 # toy_env() {
 #     export NR_TABLES=1
@@ -94,7 +93,7 @@ global_env() {
 }
 
 kaggle_run() {
-    dlrm="${cwd}/../dlrm"
+    dlrm="${cwd}/../PIM-dlrm-new"
     python "${dlrm}/dlrm_dpu_pytorch.py" \
            --arch-sparse-feature-size=16 \
            --arch-mlp-bot="13-512-256-64-16" \
@@ -103,7 +102,7 @@ kaggle_run() {
            --data-set=kaggle \
            --processed-data-file="${dlrm}/raw_data/kaggleAdDisplayChallenge_processed.npz" \
            --load-model="${dlrm}/trainedModels/kaggle-model-graham-final.pt" \
-           --mini-batch-size=500 \
+           --mini-batch-size=32 \
            --nepochs=1 \
            --inference-only
 }

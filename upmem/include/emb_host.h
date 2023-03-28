@@ -128,10 +128,10 @@ static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_row
 struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu_runtime_totals *runtime){
     struct timespec start, end;
 
-    if(table_id>=AVAILABLE_RANKS){
-        fprintf(stderr,"%d ranks available but tried to load table %dth",AVAILABLE_RANKS,table_id);
-        exit(1);
-    }
+    // if(table_id>=AVAILABLE_RANKS){
+    //     fprintf(stderr,"%d ranks available but tried to load table %dth",AVAILABLE_RANKS,table_id);
+    //     exit(1);
+    // }
 
     //TIME_NOW(&start);
     if (alloc_buffers(table_id, table_data, nr_rows) != 0) {
@@ -231,9 +231,9 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, v
 
     //printf("starting lookup\n");
     struct dpu_set_t *dpu_set_ptr = (struct dpu_set_t *) dpu_set_ptr_untyped;
-    //struct timespec start, end;
+    // struct timespec start, end;
     int dpu_id,table_id;
-    struct dpu_set_t dpu_rank,dpu;
+    struct dpu_set_t dpu_rank,dpu, set;
     struct query_len lengths[NR_TABLES];
 
 
@@ -244,6 +244,7 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, v
     DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
         DPU_ASSERT(dpu_prepare_xfer(dpu,indices[(int)(dpu_id/NR_COLS)]));
     }
+
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_indices",0,ALIGN(
         INDICES_LEN*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
     //printf("copied indices\n");
@@ -329,7 +330,21 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, v
 
     TIME_NOW(&end);
     wait_sync_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
-    
+    // long dpu_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
+    // printf("DPU Lat: %ldμs\n", dpu_lat);
+    uint32_t instructions;
+    uint32_t clks_p_sec;
+    DPU_FOREACH(set, dpu) {
+        DPU_ASSERT(
+            dpu_copy_from(dpu, "instructions", 0, &instructions, sizeof(uint32_t)));
+    }
+    DPU_FOREACH(set, dpu) {
+        DPU_ASSERT(
+            dpu_copy_from(dpu, "CLOCKS_PER_SEC", 0, &clks_p_sec, sizeof(uint32_t)));
+    }
+    // printf("DPU Freq: %uHz\n", clks_p_sec);
+    // printf("DPU cycles: %u\n", instructions);
+    // printf("DPU IPC: %f\n", (float) instructions / (float) (clks_p_sec * dpu_lat * 1.0e-6));
 
     //printf("sync done\n");
     /* if (runtime_group && RT_CONFIG == RT_LAUNCH) {
@@ -354,11 +369,11 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, v
     free(tmp_results); */
 
     
-    //printf("C: Indices and offsets copying latency: %ldμs\n", ind_copy_lat);
-    //printf("C: Query copying latency: %ldμs\n", query_copy_lat);
-    //printf("C: Dpu launch latency: %ldμs\n", dpu_launch_lat);
-    //printf("C: Results copy latency: %ldμs\n", results_copy_lat);
-    //printf("C: Callback prep latency: %ldμs\n", callback_prep_lat);
-    //printf("C: DPU sync latency: %ldμs\n", wait_sync_lat);
+    printf("C: Indices and offsets copying latency: %ldμs\n", ind_copy_lat);
+    printf("C: Query copying latency: %ldμs\n", query_copy_lat);
+    printf("C: Dpu launch latency: %ldμs\n", dpu_launch_lat);
+    printf("C: Results copy latency: %ldμs\n", results_copy_lat);
+    printf("C: Callback prep latency: %ldμs\n", callback_prep_lat);
+    printf("C: DPU sync latency: %ldμs\n", wait_sync_lat);
     return 0;
 }

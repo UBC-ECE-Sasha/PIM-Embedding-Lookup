@@ -1,20 +1,26 @@
-#include "common/include/common.h"
-#include "emb_types.h"
-
+#include <perfcounter.h>
+#include <stdio.h>
 #include <mram.h>
 #include <alloc.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <defs.h>
 #include <sem.h>
+#include "common/include/common.h"
+#include "emb_types.h"
+
+// // Profiling
+// __host uint32_t instructions;
 
 __mram_noinit struct query_len input_lengths;
 
 __mram_noinit int32_t emb_data[MEGABYTE(14)];
-__mram_noinit uint32_t input_indices[MAX_INDICES_PER_BATCH*MAX_NR_BATCHES];
-__mram_noinit uint32_t input_offsets[MAX_NR_BATCHES];
-__mram_noinit int32_t results[MAX_NR_BATCHES];
+// __mram_noinit uint32_t input_indices[MAX_INDICES_PER_BATCH*MAX_NR_BATCHES];
+// __mram_noinit uint32_t input_offsets[MAX_NR_BATCHES];
+// __mram_noinit int32_t results[MAX_NR_BATCHES];
+__mram_noinit uint32_t input_indices[12000];
+__mram_noinit uint32_t input_offsets[100];
+__mram_noinit int32_t results[100];
 
 uint32_t indices_ptr[NR_TASKLETS];
 SEMAPHORE_INIT(first_run_sem,1);
@@ -22,12 +28,17 @@ SEMAPHORE_INIT(result_sem,1);
 
 uint32_t indices_len, nr_batches, copied_indices;
 __dma_aligned struct query_len lengths;
-__dma_aligned uint32_t indices[MAX_INDICES_PER_BATCH*MAX_NR_BATCHES], offsets[MAX_NR_BATCHES];
-__dma_aligned int32_t tmp_results[MAX_NR_BATCHES];
+// __dma_aligned uint32_t indices[MAX_INDICES_PER_BATCH*MAX_NR_BATCHES], offsets[MAX_NR_BATCHES];
+// __dma_aligned int32_t tmp_results[MAX_NR_BATCHES];
+__dma_aligned uint32_t indices[12000], offsets[100];
+__dma_aligned int32_t tmp_results[100];
 
 __host uint8_t first_run = 1;
 int
 main() {
+    // // Profiling
+    // perfcounter_config(COUNT_CYCLES, true);
+
     __dma_aligned int32_t read_buff[2];  
     sem_take(&first_run_sem);
     if(first_run==1){
@@ -122,5 +133,8 @@ main() {
          first_run=1;
      }
      sem_give(&first_run_sem);
+
+    // Profiling
+    // instructions = perfcounter_get();
     return 0;
 }

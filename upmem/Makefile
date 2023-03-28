@@ -9,9 +9,9 @@ NR_TASKLETS         ?= 14
 COUNTER_CONFIG      ?= "COUNT_CYCLES"
 SHOW_DPU_LOGS       ?= 1
 MAX_ENC_BUFFER_MB   ?= 1
-NR_TABLES           ?= 10
-MAX_NR_BATCHES      ?= 64
-MAX_INDICES_PER_BATCH ?= 64
+NR_TABLES           ?= 32
+MAX_NR_BATCHES      ?= 100
+MAX_INDICES_PER_BATCH ?= 120
 RT_CONFIG           ?= "ALL"
 
 # TEST with c_test.py
