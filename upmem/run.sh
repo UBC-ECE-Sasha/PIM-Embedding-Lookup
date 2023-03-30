@@ -39,32 +39,33 @@ kaggle_env() {
 }
 build_pytorch=false
 random_env() {
-    export NR_TABLES=10
-    export NR_COLS=64
-    export MAX_NR_BATCHES=64
+    export NR_TABLES=70
+    export NR_COLS=16
+    export MAX_NR_BATCHES=16
     export NR_TASKLETS=14
-    export MAX_INDICES_PER_BATCH=64
+    export MAX_INDICES_PER_BATCH=16
 }
 
 random_run() {
     echo "Check env: NR_TABLES = ${NR_TABLES}, NR_COLS = ${NR_COLS}"
     if "${build_pytorch}"; then
         cd ${cwd}/../PIM-Pytorch
+        #ATEN_THREADING=OMP
         # NR_TABLES=${NR_TABLES} NR_COLS=${NR_COLS} MAX_NR_BATCHES=${MAX_NR_BATCHES} NR_TASKLETS=${NR_TASKLETS} REL_WITH_DEB_INFO=1 DEBUG=1 USE_DISTRIBUTED=1 USE_MKLDNN=0 USE_CUDA=0 BUILD_TEST=0 USE_NNPACK=0 USE_QNNPACK=0 USE_XNNPACK=0 BUILD_CAFFE2=1 python3 "${cwd}/../PIM-Pytorch/setup.py" develop
         python3 setup.py clean
-        REL_WITH_DEB_INFO=1 DEBUG=1 USE_DISTRIBUTED=1 USE_MKLDNN=0 USE_CUDA=0 BUILD_TEST=0 USE_NNPACK=0 USE_QNNPACK=0 USE_XNNPACK=0 BUILD_CAFFE2=1 python3 "${cwd}/../PIM-Pytorch/setup.py" develop
+        REL_WITH_DEB_INFO=1 DEBUG=1 USE_DISTRIBUTED=1 ATEN_THREADING=OMP USE_OPENMP=1 USE_MKLDNN=0 USE_CUDA=0 BUILD_TEST=0 USE_NNPACK=0 USE_QNNPACK=0 USE_XNNPACK=0 BUILD_CAFFE2=1 python3 "${cwd}/../PIM-Pytorch/setup.py" install
     else
         echo "skipping pytorch build"
     fi
     cd "${cwd}/${build_dir}"
-    python3 "${cwd}/../PIM-dlrm-new/dlrm_dpu_pytorch.py" \
-           --arch-embedding-size=100000-100000-100000-100000-100000-100000-100000-100000-100000-100000 \
+    python3 "${cwd}/../PIM-dlrm-new/dlrm_s_pytorch.py" \
+           --arch-embedding-size=100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000-100000 \
            --arch-sparse-feature-size="${NR_COLS}" \
            --arch-mlp-bot=1440-720-"${NR_COLS}" \
            --arch-mlp-top=40-20-10-1 \
            --data-generation=random \
            --mini-batch-size="${MAX_NR_BATCHES}" \
-           --num-batches=100 \
+           --num-batches=500 \
            --num-indices-per-lookup="${MAX_INDICES_PER_BATCH}" \
            --num-indices-per-lookup-fixed=True \
            --inference-only

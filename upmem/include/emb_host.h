@@ -128,11 +128,6 @@ static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_row
 struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu_runtime_totals *runtime){
     struct timespec start, end;
 
-    if(table_id>=AVAILABLE_RANKS){
-        fprintf(stderr,"%d ranks available but tried to load table %dth",AVAILABLE_RANKS,table_id);
-        exit(1);
-    }
-
     //TIME_NOW(&start);
     if (alloc_buffers(table_id, table_data, nr_rows) != 0) {
         enomem();
@@ -241,9 +236,12 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, v
     TIME_NOW(&start);
 
     //if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
+    int counter=0;
     DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
+        counter++;
         DPU_ASSERT(dpu_prepare_xfer(dpu,indices[(int)(dpu_id/NR_COLS)]));
     }
+    printf("num DPUs: %d\n",counter);
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr,DPU_XFER_TO_DPU,"input_indices",0,ALIGN(
         INDICES_LEN*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
     //printf("copied indices\n");
