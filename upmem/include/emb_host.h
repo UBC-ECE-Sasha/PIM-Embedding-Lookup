@@ -99,10 +99,15 @@ static void copy_interval(dpu_runtime_interval *interval,
 }
 
 static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_rows) {
+    // int tmp;
     
     for(int j=0; j<NR_COLS; j++){
 
         size_t sz = nr_rows*sizeof(int32_t);
+
+        // printf("\nIter: %d,\nSize of sz: %lu\nStart alloc...\n", j, sz);
+        // scanf("%d", &tmp);
+
         buffer_data[j] = (int32_t*)malloc(ALIGN(sz,8));
         if (buffer_data[j] == NULL) {
             return ENOMEM;
@@ -136,7 +141,7 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *ta
     //     exit(1);
     // }
 
-    //TIME_NOW(&start);
+    TIME_NOW(&start);
     if (alloc_buffers(table_id, table_data, nr_rows) != 0) {
         enomem();
     }
@@ -160,13 +165,14 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *ta
     DPU_FOREACH(*dpu_set, dpu, dpu_id){
         if(dpu_id<(table_id+1)*NR_COLS && dpu_id>table_id*NR_COLS){
             DPU_ASSERT(dpu_prepare_xfer(dpu, buffer_data[dpu_id-(table_id*NR_COLS)]));
+            // DPU_ASSERT(dpu_prepare_xfer(dpu, &(table_data[(dpu_id-(table_id*NR_COLS))])));
         }
     }
     DPU_ASSERT(dpu_push_xfer(*dpu_set,DPU_XFER_TO_DPU, "emb_data", 0, ALIGN(nr_rows*sizeof(int32_t),8), DPU_XFER_DEFAULT));
 
 
-    for (int i = 0; i < NR_COLS; i++)
-        free(buffer_data[i]);
+    // for (int i = 0; i < NR_COLS; i++)
+    //     free(buffer_data[i]);
     //TIME_NOW(&end);
 
     //if (runtime) runtime->execution_time_populate_copy_in += TIME_DIFFERENCE(start, end);
@@ -347,7 +353,7 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, v
             dpu_copy_from(dpu, "CLOCKS_PER_SEC", 0, &clks_p_sec, sizeof(uint32_t)));
     }
     // printf("DPU Freq: %uHz\n", clks_p_sec);
-    printf("DPU instructions: %u\n", instructions);
+    // printf("DPU instructions: %u\n", instructions);
     // printf("DPU IPC: %f\n", (float) instructions / (float) (clks_p_sec * dpu_lat * 1.0e-6));
 
     //printf("sync done\n");
