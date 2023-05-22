@@ -133,7 +133,7 @@ static int alloc_buffers(uint32_t table_id, int32_t *table_data, uint64_t nr_row
     corresponding table with the index of the first and last row held in each dpu.
 */
 
-struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *table_data, dpu_runtime_totals *runtime){
+struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t col, int32_t *table_data, dpu_runtime_totals *runtime){
     struct timespec start, end;
 
     // if(table_id>=AVAILABLE_RANKS){
@@ -163,9 +163,11 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *ta
     uint8_t dpu_id,rank_id;
     
     DPU_FOREACH(*dpu_set, dpu, dpu_id){
-        if(dpu_id<(table_id+1)*NR_COLS && dpu_id>table_id*NR_COLS){
+        // if(dpu_id<(table_id+1)*NR_COLS && dpu_id>=table_id*NR_COLS){
+        if(dpu_id == table_id * NR_COLS + col){
             // DPU_ASSERT(dpu_prepare_xfer(dpu, buffer_data[dpu_id-(table_id*NR_COLS)]));
-            DPU_ASSERT(dpu_prepare_xfer(dpu, &(table_data[(dpu_id-(table_id*NR_COLS))])));
+            // DPU_ASSERT(dpu_prepare_xfer(dpu, &(table_data[((dpu_id-table_id*NR_COLS)*nr_rows)])));
+            DPU_ASSERT(dpu_prepare_xfer(dpu, table_data));
         }
     }
     DPU_ASSERT(dpu_push_xfer(*dpu_set,DPU_XFER_TO_DPU, "emb_data", 0, ALIGN(nr_rows*sizeof(int32_t),8), DPU_XFER_DEFAULT));

@@ -31,7 +31,7 @@ void synthetic_populate(uint32_t nr_rows, uint32_t nr_cols, uint32_t nr_tables){
 		int32_t* table_data=(int32_t*)malloc(nr_rows*nr_cols*sizeof(int32_t));
 		for (int i=0; i<nr_rows*nr_cols; i++)
 			table_data[i]=(int)rand();
-		dpu_set=populate_mram(k, nr_rows,table_data, NULL);
+		dpu_set=populate_mram(k, nr_rows, 0, table_data, NULL);
 		emb_tables[k]=table_data;
 		//free(table_data);
 	}
