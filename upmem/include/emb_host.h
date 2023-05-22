@@ -141,10 +141,10 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *ta
     //     exit(1);
     // }
 
-    TIME_NOW(&start);
-    if (alloc_buffers(table_id, table_data, nr_rows) != 0) {
-        enomem();
-    }
+    // TIME_NOW(&start);
+    // if (alloc_buffers(table_id, table_data, nr_rows) != 0) {
+    //     enomem();
+    // }
     //TIME_NOW(&end);
 
     //if (runtime) runtime->execution_time_prepare += TIME_DIFFERENCE(start, end);
@@ -164,8 +164,8 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, int32_t *ta
     
     DPU_FOREACH(*dpu_set, dpu, dpu_id){
         if(dpu_id<(table_id+1)*NR_COLS && dpu_id>table_id*NR_COLS){
-            DPU_ASSERT(dpu_prepare_xfer(dpu, buffer_data[dpu_id-(table_id*NR_COLS)]));
-            // DPU_ASSERT(dpu_prepare_xfer(dpu, &(table_data[(dpu_id-(table_id*NR_COLS))])));
+            // DPU_ASSERT(dpu_prepare_xfer(dpu, buffer_data[dpu_id-(table_id*NR_COLS)]));
+            DPU_ASSERT(dpu_prepare_xfer(dpu, &(table_data[(dpu_id-(table_id*NR_COLS))])));
         }
     }
     DPU_ASSERT(dpu_push_xfer(*dpu_set,DPU_XFER_TO_DPU, "emb_data", 0, ALIGN(nr_rows*sizeof(int32_t),8), DPU_XFER_DEFAULT));
@@ -235,8 +235,8 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, v
     // // Check env
     // printf("C test: Check envs: NR_COLS=%d, TMP_NR_TABLES=%d, MAX_NR_BATCHES=%d, NR_TASKLETS=%d", NR_COLS, TMP_NR_TABLES, MAX_NR_BATCHES, NR_TASKLETS);
 
-    // // PIM: Profiling
-    // struct timespec start, end;
+    // PIM: Profiling
+    struct timespec start, end;
 
     //printf("starting lookup\n");
     struct dpu_set_t *dpu_set_ptr = (struct dpu_set_t *) dpu_set_ptr_untyped;
@@ -246,8 +246,8 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, v
     struct query_len lengths[TMP_NR_TABLES];
 
 
-    // long ind_copy_lat;
-    // TIME_NOW(&start);
+    long ind_copy_lat;
+    TIME_NOW(&start);
 
     //if (runtime_group && RT_CONFIG == RT_ALL) TIME_NOW(&start);
     DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
@@ -265,11 +265,11 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, v
         MAX_NR_BATCHES*sizeof(uint32_t),8),DPU_XFER_DEFAULT));
     //printf("copied offsets\n");
 
-    // TIME_NOW(&end);
-    // ind_copy_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
+    TIME_NOW(&end);
+    ind_copy_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
 
-    // long query_copy_lat;
-    // TIME_NOW(&start);
+    long query_copy_lat;
+    TIME_NOW(&start);
 
     DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
         table_id=(int)(dpu_id/NR_COLS);
@@ -281,23 +281,23 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, v
         sizeof(struct query_len),DPU_XFER_DEFAULT));
     //printf("query copied\n");
 
-    // TIME_NOW(&end);
-    // query_copy_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
+    TIME_NOW(&end);
+    query_copy_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
 
-    // long dpu_launch_lat;
-    // TIME_NOW(&start);
+    long dpu_launch_lat;
+    TIME_NOW(&start);
 
     DPU_ASSERT(dpu_launch(*dpu_set_ptr, DPU_SYNCHRONOUS));
     //printf("launch done\n");
 
-    // TIME_NOW(&end);
-    // dpu_launch_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
+    TIME_NOW(&end);
+    dpu_launch_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
 
     int32_t ***tmp_results=(int32_t***)malloc(TMP_NR_TABLES*sizeof(int32_t**));
     //printf("wanna copy\n");
 
-    // long results_copy_lat;
-    // TIME_NOW(&start);
+    long results_copy_lat;
+    TIME_NOW(&start);
 
     DPU_FOREACH(*dpu_set_ptr,dpu,dpu_id){
         if(dpu_id%NR_COLS==0){
@@ -311,11 +311,11 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, v
     DPU_ASSERT(dpu_push_xfer(*dpu_set_ptr, DPU_XFER_FROM_DPU, "results", 0, ALIGN(sizeof(int32_t)*MAX_NR_BATCHES,8), DPU_XFER_DEFAULT));
     //printf("Copies done\n");
 
-    // TIME_NOW(&end);
-    // results_copy_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
+    TIME_NOW(&end);
+    results_copy_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
     
-    // long callback_prep_lat;
-    // TIME_NOW(&start);
+    long callback_prep_lat;
+    TIME_NOW(&start);
 
     struct callback_input *callback_data=(struct callback_input*)malloc(sizeof(struct callback_input));
     callback_data->final_results=final_results;
@@ -329,16 +329,16 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, v
     //     DPU_ASSERT(dpu_log_read(dpu, stdout));
     // }
 
-    // TIME_NOW(&end);
-    // callback_prep_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
+    TIME_NOW(&end);
+    callback_prep_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
     
-    // long wait_sync_lat;
-    // TIME_NOW(&start);
+    long wait_sync_lat;
+    TIME_NOW(&start);
 
     dpu_sync(*dpu_set_ptr);
 
-    // TIME_NOW(&end);
-    // wait_sync_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
+    TIME_NOW(&end);
+    wait_sync_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
     
     // long dpu_lat = end.tv_sec*1000000 + end.tv_nsec/1000 - start.tv_sec*1000000 - start.tv_nsec/1000;
     // printf("DPU Lat: %ldμs\n", dpu_lat);
@@ -379,11 +379,11 @@ int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, v
     free(tmp_results); */
 
     
-    // printf("C: Indices and offsets copying latency: %ldμs\n", ind_copy_lat);
-    // printf("C: Query copying latency: %ldμs\n", query_copy_lat);
-    // printf("C: Dpu launch latency: %ldμs\n", dpu_launch_lat);
-    // printf("C: Results copy latency: %ldμs\n", results_copy_lat);
-    // printf("C: Callback prep latency: %ldμs\n", callback_prep_lat);
-    // printf("C: DPU sync latency: %ldμs\n", wait_sync_lat);
+    printf("C: Indices and offsets copying latency: %ldμs\n", ind_copy_lat);
+    printf("C: Query copying latency: %ldμs\n", query_copy_lat);
+    printf("C: Dpu launch latency: %ldμs\n", dpu_launch_lat);
+    printf("C: Results copy latency: %ldμs\n", results_copy_lat);
+    printf("C: Callback prep latency: %ldμs\n", callback_prep_lat);
+    printf("C: DPU sync latency: %ldμs\n", wait_sync_lat);
     return 0;
 }
