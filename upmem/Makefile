@@ -9,7 +9,7 @@ NR_TASKLETS         ?= 14
 COUNTER_CONFIG      ?= "COUNT_CYCLES"
 SHOW_DPU_LOGS       ?= 1
 MAX_ENC_BUFFER_MB   ?= 1
-NR_TABLES           ?= 32
+# NR_TABLES           ?= 2
 MAX_NR_BATCHES      ?= 64
 MAX_INDICES_PER_BATCH ?= 120
 RT_CONFIG           ?= "ALL"
@@ -137,7 +137,7 @@ export NR_DPUS
 export NR_TASKLETS
 export COUNTER_CONFIG
 export EXE_DPU
-export NR_TABLES
+# export NR_TABLES
 export NR_COLS
 export MAX_NR_BATCHES
 export MAX_INDICES_PER_BATCH

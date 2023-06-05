@@ -9,8 +9,8 @@
 #include "common/include/common.h"
 #include "emb_types.h"
 
-#define TMP_MAX_NR_BATCHES 64
-#define TMP_MAX_INDICES_PER_BATCH 120
+// #define TMP_MAX_NR_BATCHES 64
+// #define TMP_MAX_INDICES_PER_BATCH 120
 
 // Profiling
 __host uint32_t instructions;
@@ -18,9 +18,9 @@ __host uint32_t instructions;
 __mram_noinit struct query_len input_lengths;
 
 __mram_noinit int32_t emb_data[MEGABYTE(14)];
-__mram_noinit uint32_t input_indices[TMP_MAX_INDICES_PER_BATCH*TMP_MAX_NR_BATCHES];
-__mram_noinit uint32_t input_offsets[TMP_MAX_NR_BATCHES];
-__mram_noinit int32_t results[TMP_MAX_NR_BATCHES];
+__mram_noinit uint32_t input_indices[MAX_INDICES_PER_BATCH*MAX_NR_BATCHES];
+__mram_noinit uint32_t input_offsets[MAX_NR_BATCHES];
+__mram_noinit int32_t results[MAX_NR_BATCHES];
 
 uint32_t indices_ptr[NR_TASKLETS];
 SEMAPHORE_INIT(first_run_sem,1);
@@ -28,8 +28,8 @@ SEMAPHORE_INIT(result_sem,1);
 
 uint32_t indices_len, nr_batches, copied_indices;
 __dma_aligned struct query_len lengths;
-__dma_aligned uint32_t indices[TMP_MAX_INDICES_PER_BATCH*TMP_MAX_NR_BATCHES], offsets[TMP_MAX_NR_BATCHES];
-__dma_aligned int32_t tmp_results[TMP_MAX_NR_BATCHES];
+__dma_aligned uint32_t indices[MAX_INDICES_PER_BATCH*MAX_NR_BATCHES], offsets[MAX_NR_BATCHES];
+__dma_aligned int32_t tmp_results[MAX_NR_BATCHES];
 
 __host uint8_t first_run = 1;
 int
@@ -66,12 +66,12 @@ main() {
 
     // DEBUG
     // printf("DPU Binary: Check indices:\n[ ");
-    // for (int debug = 0; debug < 32*TMP_MAX_NR_BATCHES; debug++) {
+    // for (int debug = 0; debug < 32*MAX_NR_BATCHES; debug++) {
     //     printf("%d, ", input_indices[debug]);
     // }
     // printf("]\n");
     // printf("DPU Binary: Check offsets:\n[ ");
-    // for (int debug = 0; debug < TMP_MAX_NR_BATCHES; debug++) {
+    // for (int debug = 0; debug < MAX_NR_BATCHES; debug++) {
     //     if (input_offsets[debug] >= 32 * 64) {
     //         printf("OFFSET RANGE EXCEEDED");
     //     }

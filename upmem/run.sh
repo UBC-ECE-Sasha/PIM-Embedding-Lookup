@@ -6,6 +6,9 @@ build=false
 run=false
 debug=false
 verbose=false
+export SDK_PATH=/home/upmem0016/jwong5/upmem-2021.3.0-Linux-x86_64/include/dpu
+export DPU_IMPL_PATH=/home/upmem0016/jwong5/PIM-Embedding-Lookup/upmem
+
 
 usage() {
     printf "%s %s\n\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n" \
@@ -37,13 +40,16 @@ kaggle_env() {
     export MAX_NR_BATCHES=512
     export NR_TASKLETS=14
 }
-build_pytorch=true
+build_pytorch=false
 random_env() {
-    export NR_TABLES=32
-    export NR_COLS=64
-    export MAX_NR_BATCHES=64
-    export NR_TASKLETS=14
-    export MAX_INDICES_PER_BATCH=120
+    echo ${NR_TABLES}
+    echo ${NR_COLS}
+    echo ${TABLE_CONFIG}
+    # export NR_TABLES=32
+    # export NR_COLS=64
+    # export MAX_NR_BATCHES=64
+    # export NR_TASKLETS=14
+    # export MAX_INDICES_PER_BATCH=120
 }
 
 random_run() {
@@ -57,19 +63,22 @@ random_run() {
         echo "skipping pytorch build"
     fi
     cd "${cwd}/${build_dir}"
+    #    --arch-embedding-size="${TABLE_CONFIG}"
     #    --arch-embedding-size=500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000 \
     #    --arch-embedding-size=500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000 \
     python3 "${cwd}/../PIM-dlrm-new/dlrm_dpu_pytorch.py" \
-           --arch-embedding-size=500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000 \
+           --arch-embedding-size="${TABLE_CONFIG}" \
            --arch-sparse-feature-size="${NR_COLS}" \
            --arch-mlp-bot=256-128-"${NR_COLS}" \
            --arch-mlp-top=128-64-1 \
            --data-generation=random \
            --mini-batch-size="${MAX_NR_BATCHES}" \
-           --num-batches=25 \
+           --num-batches=50 \
            --num-indices-per-lookup="${MAX_INDICES_PER_BATCH}" \
            --num-indices-per-lookup-fixed=True \
            --inference-only
+
+    cd "${cwd}"
 }
 # Old - pre-loadgenerator
 # toy_env() {
