@@ -9,7 +9,8 @@
 	url = https://github.com/UBC-ECE-Sasha/PIM-DeepRecSys.git
 [submodule "PIM-dlrm-new"]
 	path = PIM-dlrm-new
-	url = https://github.com/UBC-ECE-Sasha/PIM-dlrm-new.git
+	url = https://github.com/UBC-ECE-Sasha/PIM-dlrm.git
+	branch = 2023_q1_experiments
 [submodule "PIM-Pytorch"]
 	path = PIM-Pytorch
 	url = https://github.com/UBC-ECE-Sasha/PIM-Pytorch.git

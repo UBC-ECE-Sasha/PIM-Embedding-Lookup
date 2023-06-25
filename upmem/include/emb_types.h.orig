@@ -28,11 +28,3 @@ struct callback_input{
     uint32_t nr_batches;
     int32_t*** tmp_results;
 }; 
-
-
-struct metadata
-{
-uint32_t indices_len;
-uint32_t offsets_len;
-uint32_t embedding_data_len;
-}

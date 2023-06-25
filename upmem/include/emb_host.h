@@ -20,7 +20,7 @@
 #define RT_CONFIG 0
 
 #ifndef DPU_BINARY
-#    define DPU_BINARY "/home/upmem0016/jwong5/PIM-Embedding-Lookup/upmem/build/release/dpu/emb_dpu_lookup" // Relative path regarding the PyTorch code
+#    define DPU_BINARY "/home/prithvi/prithvi/phd/eth/safari/research/ubc/scatter_gather/PIM-Embedding-Lookup//PIM-Embedding-Lookup/upmem/build/release/dpu/emb_dpu_lookup" // Relative path regarding the PyTorch code
 #endif
 
 
@@ -231,12 +231,14 @@ dpu_error_t post_process(struct dpu_set_t dpu_rank, uint32_t rank_id, void *arg)
     Result:*
     This function updates ans with the elements of the rows that we have lookedup
 */
-int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, void *dpu_set_ptr_untyped, int64_t latency_print
+//int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, void *dpu_set_ptr_untyped, int64_t latency_print
+int32_t* lookup(uint32_t** indices, uint32_t** offsets, float** final_results, void *dpu_set_ptr_untyped
                 //,dpu_runtime_group *runtime_group
                 ){
     // // Check env
     // printf("C test: Check envs: NR_COLS=%d, NR_TABLES=%d, MAX_NR_BATCHES=%d, NR_TASKLETS=%d", NR_COLS, NR_TABLES, MAX_NR_BATCHES, NR_TASKLETS);
-    int latency_record = latency_print;
+    //int latency_record = latency_print;
+    int latency_record = 0;
     long ind_copy_lat, query_copy_lat, dpu_launch_lat, results_copy_lat, callback_prep_lat, wait_sync_lat;
 
 
