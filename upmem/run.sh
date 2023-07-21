@@ -6,8 +6,11 @@ build=false
 run=false
 debug=false
 verbose=false
-export SDK_PATH=/home/upmem0016/jwong5/upmem-2021.3.0-Linux-x86_64/include/dpu
-export DPU_IMPL_PATH=/home/upmem0016/jwong5/PIM-Embedding-Lookup/upmem
+
+# IMPORTANT: CHANGE THE FOLLOWING FOR YOUR CONFIG
+export SDK_PATH=/home/jwong/upmem-2023.2.0-Linux-x86_64/include/dpu
+export DPU_IMPL_PATH=/home/jwong/PIM-Embedding-Lookup/upmem
+export PY7M_PATH=/home/jwong/miniconda3/pkgs/python-3.7.10-hffdb5ce_100_cpython/lib/
 
 
 usage() {
@@ -40,7 +43,7 @@ kaggle_env() {
     export MAX_NR_BATCHES=512
     export NR_TASKLETS=14
 }
-build_pytorch=false
+build_pytorch=true
 random_env() {
     echo ${NR_TABLES}
     echo ${NR_COLS}
@@ -128,6 +131,7 @@ build_code() {
     "${dataset}_env"
     global_env
 
+    make clean
     make
 }
 

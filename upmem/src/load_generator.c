@@ -97,7 +97,7 @@ float** synthetic_inference(uint32_t nr_tables, uint32_t nr_batches, uint32_t in
 	int sum=0;
 	for(int i=0; i<100; i++){
 		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
-		lookup(synthetic_indices, synthetic_offsets, final_results,(void*)dpu_set);
+		lookup(synthetic_indices, synthetic_offsets, final_results,(void*)dpu_set, 0);
 		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
 		sum+=time_diff(start, end).tv_nsec;
 	}

@@ -10,18 +10,18 @@ COUNTER_CONFIG      ?= "COUNT_CYCLES"
 SHOW_DPU_LOGS       ?= 1
 MAX_ENC_BUFFER_MB   ?= 1
 # NR_TABLES           ?= 2
-MAX_NR_BATCHES      ?= 64
-MAX_INDICES_PER_BATCH ?= 120
+MAX_NR_BATCHES      ?= ${MAX_NR_BATCHES}
+MAX_INDICES_PER_BATCH ?= ${MAX_INDICES_PER_BATCH}
 RT_CONFIG           ?= "ALL"
 
 # TEST with c_test.py
 DPU_TEST            ?= 0
 
 ifeq ($(DPU_TEST),1)
-  NR_COLS             ?= 64
+  NR_COLS             ?= ${NR_COLS}
   NR_DPUS             = 640
 else
-  NR_COLS             ?= 64   # Change this
+  NR_COLS             ?= ${NR_COLS}   # Change this
   NR_DPUS             ?= 640
 endif
 
@@ -116,7 +116,8 @@ all: $(DEFAULT_TARGET) $(APP_LIB) dpu
 ##############################################################################################
 $(APP_BIN): $(APP_OBJS)
 	$(SHOW_CC) $@
-	$(SILENCE)$(CC) -o $@ $(APP_OBJS) $(DPU_OPTS)
+	$(SILENCE)$(CC) -o $@ $(APP_OBJS) $(DPU_OPTS) -L${PY7M_PATH} \
+                                                -lpython3.7m
 
 $(APP_LIB): $(APP_OBJS)
 	$(SHOW_CC) $@
