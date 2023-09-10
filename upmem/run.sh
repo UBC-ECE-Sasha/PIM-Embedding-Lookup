@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
@@ -6,6 +6,12 @@ build=false
 run=false
 debug=false
 verbose=false
+
+# IMPORTANT: CHANGE THE FOLLOWING FOR YOUR CONFIG
+export SDK_PATH=/home/jwong/upmem-2023.2.0-Linux-x86_64/include/dpu
+export DPU_IMPL_PATH=/home/jwong/PIM-Embedding-Lookup/upmem
+export PY7M_PATH=/home/jwong/miniconda3/pkgs/python-3.7.10-hffdb5ce_100_cpython/lib/
+
 
 usage() {
     printf "%s %s\n\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n" \
@@ -37,18 +43,61 @@ kaggle_env() {
     export MAX_NR_BATCHES=512
     export NR_TASKLETS=14
 }
-
+build_pytorch=true
 random_env() {
-    export NR_TABLES=10
-    export NR_COLS=64
-    export MAX_NR_BATCHES=128
-    export NR_TASKLETS=14
+    echo ${NR_TABLES}
+    echo ${NR_COLS}
+    echo ${TABLE_CONFIG}
+    # export NR_TABLES=32
+    # export NR_COLS=64
+    # export MAX_NR_BATCHES=64
+    # export NR_TASKLETS=14
+    # export MAX_INDICES_PER_BATCH=120
 }
 
+random_run() {
+    echo "Check env: NR_TABLES = ${NR_TABLES}, NR_COLS = ${NR_COLS}"
+    if "${build_pytorch}"; then
+        cd ${cwd}/../PIM-Pytorch
+        # NR_TABLES=${NR_TABLES} NR_COLS=${NR_COLS} MAX_NR_BATCHES=${MAX_NR_BATCHES} NR_TASKLETS=${NR_TASKLETS} REL_WITH_DEB_INFO=1 DEBUG=1 USE_DISTRIBUTED=1 USE_MKLDNN=0 USE_CUDA=0 BUILD_TEST=0 USE_NNPACK=0 USE_QNNPACK=0 USE_XNNPACK=0 BUILD_CAFFE2=1 python3 "${cwd}/../PIM-Pytorch/setup.py" develop
+        python3 setup.py clean
+        REL_WITH_DEB_INFO=1 DEBUG=1 USE_DISTRIBUTED=1 USE_MKLDNN=0 USE_CUDA=0 BUILD_TEST=0 USE_NNPACK=0 USE_QNNPACK=0 USE_XNNPACK=0 BUILD_CAFFE2=1 python3 "${cwd}/../PIM-Pytorch/setup.py" develop
+    else
+        echo "skipping pytorch build"
+    fi
+    cd "${cwd}/${build_dir}"
+    #    --arch-embedding-size="${TABLE_CONFIG}"
+    #    --arch-embedding-size=500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000 \
+    #    --arch-embedding-size=500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000 \
+    python3 "${cwd}/../PIM-dlrm-new/dlrm_dpu_pytorch.py" \
+           --arch-embedding-size="${TABLE_CONFIG}" \
+           --arch-sparse-feature-size="${NR_COLS}" \
+           --arch-mlp-bot=256-128-"${NR_COLS}" \
+           --arch-mlp-top=128-64-1 \
+           --data-generation=random \
+           --mini-batch-size="${MAX_NR_BATCHES}" \
+           --num-batches=50 \
+           --num-indices-per-lookup="${MAX_INDICES_PER_BATCH}" \
+           --num-indices-per-lookup-fixed=True \
+           --inference-only
+
+    cd "${cwd}"
+}
+# Old - pre-loadgenerator
+# toy_env() {
+#     export NR_TABLES=1
+#     export NR_COLS=8
+#     export DPU_TEST=1
+#     export NR_TASKLETS=1
+# }
 toy_env() {
-    export NR_COLS=8
+    export NR_TABLES=9
+    export NR_COLS=64
+    export NR_BATCHES=64
     export DPU_TEST=1
-    export NR_TASKLETS=1
+    export MAX_NR_BATCHES=64
+    export NR_TASKLETS=14
+    # rows?
 }
 
 global_env() {
@@ -58,7 +107,7 @@ global_env() {
 }
 
 kaggle_run() {
-    dlrm="${cwd}/../dlrm"
+    dlrm="${cwd}/../PIM-dlrm-new"
     python "${dlrm}/dlrm_dpu_pytorch.py" \
            --arch-sparse-feature-size=16 \
            --arch-mlp-bot="13-512-256-64-16" \
@@ -67,28 +116,14 @@ kaggle_run() {
            --data-set=kaggle \
            --processed-data-file="${dlrm}/raw_data/kaggleAdDisplayChallenge_processed.npz" \
            --load-model="${dlrm}/trainedModels/kaggle-model-graham-final.pt" \
-           --mini-batch-size=500 \
+           --mini-batch-size=32 \
            --nepochs=1 \
-           --inference-only
-}
-
-random_run() {
-    python3 "${cwd}/../PIM-dlrm-new/dlrm_dpu_pytorch.py" \
-           --arch-embedding-size=65000-65000-65000-65000-65000-65000-65000-65000-65000-65000 \
-           --arch-sparse-feature-size=64 \
-           --arch-mlp-bot=1440-720-64 \
-           --arch-mlp-top=40-20-10-1 \
-           --data-generation=random \
-           --mini-batch-size=128 \
-           --num-batches=10 \
-           --num-indices-per-lookup=32 \
-           --num-indices-per-lookup-fixed=True \
            --inference-only
 }
 
 toy_run() {
     echo "DPU_TEST=${DPU_TEST}"
-    python3 "${cwd}/c_test.py"
+    ./emb_host
 }
 
 build_code() {
@@ -96,6 +131,7 @@ build_code() {
     "${dataset}_env"
     global_env
 
+    make clean
     make
 }
 

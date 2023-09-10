@@ -1,19 +1,24 @@
-// To build the code: dpu-upmem-dpurte-clang -o toy_dpu toy_dpu.c
-#include "common/include/common.h"
-#include "emb_types.h"
-
+#include <perfcounter.h>
+#include <stdio.h>
 #include <mram.h>
 #include <alloc.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <defs.h>
 #include <sem.h>
+#include "common/include/common.h"
+#include "emb_types.h"
+
+// #define TMP_MAX_NR_BATCHES 64
+// #define TMP_MAX_INDICES_PER_BATCH 120
+
+// Profiling
+__host uint32_t instructions;
 
 __mram_noinit struct query_len input_lengths;
 
 __mram_noinit int32_t emb_data[MEGABYTE(14)];
-__mram_noinit uint32_t input_indices[32*MAX_NR_BATCHES];
+__mram_noinit uint32_t input_indices[MAX_INDICES_PER_BATCH*MAX_NR_BATCHES];
 __mram_noinit uint32_t input_offsets[MAX_NR_BATCHES];
 __mram_noinit int32_t results[MAX_NR_BATCHES];
 
@@ -23,12 +28,15 @@ SEMAPHORE_INIT(result_sem,1);
 
 uint32_t indices_len, nr_batches, copied_indices;
 __dma_aligned struct query_len lengths;
-__dma_aligned uint32_t indices[32*MAX_NR_BATCHES], offsets[MAX_NR_BATCHES];
+__dma_aligned uint32_t indices[MAX_INDICES_PER_BATCH*MAX_NR_BATCHES], offsets[MAX_NR_BATCHES];
 __dma_aligned int32_t tmp_results[MAX_NR_BATCHES];
 
 __host uint8_t first_run = 1;
 int
 main() {
+    // Profiling
+    perfcounter_config(COUNT_CYCLES, true);
+
     __dma_aligned int32_t read_buff[2];  
     sem_take(&first_run_sem);
     if(first_run==1){
@@ -55,6 +63,46 @@ main() {
          indices_ptr[me()]=0;
 
     uint32_t last_written=0;
+
+    // DEBUG
+    // printf("DPU Binary: Check indices:\n[ ");
+    // for (int debug = 0; debug < 32*MAX_NR_BATCHES; debug++) {
+    //     printf("%d, ", input_indices[debug]);
+    // }
+    // printf("]\n");
+    // printf("DPU Binary: Check offsets:\n[ ");
+    // for (int debug = 0; debug < MAX_NR_BATCHES; debug++) {
+    //     if (input_offsets[debug] >= 32 * 64) {
+    //         printf("OFFSET RANGE EXCEEDED");
+    //     }
+    //     // printf("%d, ", input_offsets[debug]);
+    // }
+    // printf("]\n");
+    // printf("DPU Binary: Check indices_ptr:\n[ ");
+    // for (int debug = 0; debug < NR_TASKLETS; debug++) {
+    //     printf("%d, ", indices_ptr[debug]);
+    // }
+    // printf("]\n");
+    // printf("DPU Binary: Check index reference by indices_ptr:\n[ ");
+    // printf("indices_len = %d\n", indices_len);
+    // for (uint32_t debug = 0; debug < indices_len; debug++) {
+    //     if (indices[debug] >= 65000) {
+    //         printf("INDEX RANGE EXCEEDED at %d: %u\n", debug, indices[debug]);
+    //     }
+    //     // printf("%d, ", indices[indices_ptr[debug]]);
+    // }
+    // printf("]\n");
+    // printf("DPU Binary: Check embdata reference by index:\n[ ");
+    // for (uint32_t debug = 0; debug < indices_len; debug++) {
+    //     printf("%d, ", emb_data[indices[indices_ptr[debug]]]);
+    // }
+    // printf("%d, ", emb_data[0]);
+    // printf("%d, ", emb_data[32000]);
+    // printf("%d, ", emb_data[64999]);
+    // printf("]\n");
+
+
+
     for (uint64_t i=me(); i< nr_batches; i+=NR_TASKLETS){
 
         tmp_results[i]=0;
@@ -83,5 +131,8 @@ main() {
          first_run=1;
      }
      sem_give(&first_run_sem);
+
+    // Profiling
+    instructions = perfcounter_get();
     return 0;
 }

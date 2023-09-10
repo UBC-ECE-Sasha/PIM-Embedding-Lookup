@@ -3,10 +3,13 @@
 	url = https://github.com/UBC-ECE-Sasha/PIM-common.git
 [submodule "dlrm"]
 	path = dlrm
-	url = https://github.com/UBC-ECE-Sasha/PIM-Embedding-dlrm.git
+	url = https://github.com/UBC-ECE-Sasha/PIM-dlrm.git
 [submodule "PIM-DeepRecSys"]
 	path = PIM-DeepRecSys
 	url = https://github.com/UBC-ECE-Sasha/PIM-DeepRecSys.git
 [submodule "PIM-dlrm-new"]
 	path = PIM-dlrm-new
 	url = https://github.com/UBC-ECE-Sasha/PIM-dlrm-new.git
+[submodule "PIM-Pytorch"]
+	path = PIM-Pytorch
+	url = https://github.com/UBC-ECE-Sasha/PIM-Pytorch.git

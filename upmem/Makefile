@@ -4,24 +4,25 @@ PROJECT             = emb_host
 PROJECT_LIB         = emblib.so
 EXE_DPU             ?= emb_dpu_lookup
 BUILD_DIR           ?= build
-NR_DPUS             ?= 32
+NR_DPUS             ?= 640
 NR_TASKLETS         ?= 14
 COUNTER_CONFIG      ?= "COUNT_CYCLES"
 SHOW_DPU_LOGS       ?= 1
 MAX_ENC_BUFFER_MB   ?= 1
-NR_TABLES           ?= 8
-MAX_NR_BATCHES      ?= 32
+# NR_TABLES           ?= 2
+MAX_NR_BATCHES      ?= ${MAX_NR_BATCHES}
+MAX_INDICES_PER_BATCH ?= ${MAX_INDICES_PER_BATCH}
 RT_CONFIG           ?= "ALL"
 
 # TEST with c_test.py
 DPU_TEST            ?= 0
 
 ifeq ($(DPU_TEST),1)
-  NR_COLS             ?= 6
-  NR_DPUS             = 8
+  NR_COLS             ?= ${NR_COLS}
+  NR_DPUS             = 640
 else
-  NR_COLS             ?= 16
-  NR_DPUS             ?= 32
+  NR_COLS             ?= ${NR_COLS}   # Change this
+  NR_DPUS             ?= 640
 endif
 
 # Version information
@@ -31,7 +32,8 @@ VERSION             = 0.0.0
 APP_BIN             = $(BUILD_DIR)/$(PROJECT)
 APP_LIB             = $(BUILD_DIR)/$(PROJECT_LIB)
 APP_SOURCES         =
-APP_MAIN            = src/emb_host.c
+# APP_MAIN            = src/emb_host.c
+APP_MAIN            = src/load_generator.c
 APP_OBJS            = $(patsubst %.c,$(BUILD_DIR)/%.o,$(APP_SOURCES) $(APP_MAIN))
 
 # Includes
@@ -72,6 +74,7 @@ CFLAGS              += $(COMMON_CFLAGS) \
                        -DNR_TABLES=$(NR_TABLES) \
                        -DNR_COLS=$(NR_COLS) \
                        -DMAX_NR_BATCHES=$(MAX_NR_BATCHES) \
+                       -DMAX_INDICES_PER_BATCH=$(MAX_INDICES_PER_BATCH) \
                        -DHOST=1 \
                        -DDPU_BINARY=\"dpu/$(EXE_DPU)\" \
                        -DMAX_ENC_BUFFER_MB="$(MAX_ENC_BUFFER_MB)" \
@@ -113,7 +116,8 @@ all: $(DEFAULT_TARGET) $(APP_LIB) dpu
 ##############################################################################################
 $(APP_BIN): $(APP_OBJS)
 	$(SHOW_CC) $@
-	$(SILENCE)$(CC) -o $@ $(APP_OBJS) $(DPU_OPTS)
+	$(SILENCE)$(CC) -o $@ $(APP_OBJS) $(DPU_OPTS) -L${PY7M_PATH} \
+                                                -lpython3.7m
 
 $(APP_LIB): $(APP_OBJS)
 	$(SHOW_CC) $@
@@ -134,9 +138,10 @@ export NR_DPUS
 export NR_TASKLETS
 export COUNTER_CONFIG
 export EXE_DPU
-export NR_TABLES
+# export NR_TABLES
 export NR_COLS
 export MAX_NR_BATCHES
+export MAX_INDICES_PER_BATCH
 
 dpu:
 	$(SHOW_MAKE) $@
@@ -162,7 +167,7 @@ clean:
 ##############################################################################################
 format:
 	$(SHOW_FORMAT) $@
-	$(SILENCE)$(CLANG_FORMAT) -i src/*.c # src/*.h include/*.h
+	$(SILENCE)$(CLANG_FORMAT) -i src/*.c src/*.h include/*.h include/host/include/*.h
 	$(SILENCE)$(MAKE) format -C src/dpu
 
 .PHONY: format

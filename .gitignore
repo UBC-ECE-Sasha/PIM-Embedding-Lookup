@@ -160,3 +160,7 @@ upmem/start-docker.sh
 
 # Niloo local files
 upmem/local_files
+
+# PIM: Experiment Outs
+post_opt_res/
+script_working*

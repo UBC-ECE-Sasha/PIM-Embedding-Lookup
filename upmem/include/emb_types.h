@@ -22,3 +22,9 @@ struct query_len {
     uint32_t indices_len;
     uint32_t nr_batches;
 }__attribute__((packed));
+
+struct callback_input{
+    float** final_results;
+    uint32_t nr_batches;
+    int32_t*** tmp_results;
+}; 
