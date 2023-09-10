@@ -1,9 +1,6 @@
 [submodule "upmem/PIM-common"]
 	path = upmem/PIM-common
 	url = https://github.com/UBC-ECE-Sasha/PIM-common.git
-[submodule "dlrm"]
-	path = dlrm
-	url = https://github.com/UBC-ECE-Sasha/PIM-dlrm.git
 [submodule "PIM-DeepRecSys"]
 	path = PIM-DeepRecSys
 	url = https://github.com/UBC-ECE-Sasha/PIM-DeepRecSys.git
