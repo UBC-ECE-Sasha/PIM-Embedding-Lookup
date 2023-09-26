@@ -21,10 +21,16 @@ struct embedding_table {
 struct query_len {
     uint32_t indices_len;
     uint32_t nr_batches;
+    uint32_t results_start;     // Index of uint32_t array, not offset in bytes
+    uint32_t offsets_start;     // Index of uint32_t array, not offset in bytes
+
 }__attribute__((packed));
 
 struct callback_input{
     float** final_results;
-    uint32_t nr_batches;
+    uint32_t* off_len;
     int32_t*** tmp_results;
+    uint32_t nr_tables;
+    uint32_t* nr_cols;
+    uint32_t total_cols;
 }; 

@@ -43,7 +43,7 @@ kaggle_env() {
     export MAX_NR_BATCHES=512
     export NR_TASKLETS=14
 }
-build_pytorch=true
+build_pytorch=false
 random_env() {
     echo ${NR_TABLES}
     echo ${NR_COLS}
@@ -69,7 +69,7 @@ random_run() {
     #    --arch-embedding-size="${TABLE_CONFIG}"
     #    --arch-embedding-size=500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000 \
     #    --arch-embedding-size=500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000-500000 \
-    python3 "${cwd}/../PIM-dlrm-new/dlrm_dpu_pytorch.py" \
+    python3 "${cwd}/../PIM-dlrm-new/dlrm_s_pytorch.py" \
            --arch-embedding-size="${TABLE_CONFIG}" \
            --arch-sparse-feature-size="${NR_COLS}" \
            --arch-mlp-bot=256-128-"${NR_COLS}" \

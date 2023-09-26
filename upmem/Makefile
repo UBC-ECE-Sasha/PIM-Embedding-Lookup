@@ -18,10 +18,10 @@ RT_CONFIG           ?= "ALL"
 DPU_TEST            ?= 0
 
 ifeq ($(DPU_TEST),1)
-  NR_COLS             ?= ${NR_COLS}
+  # NR_COLS             ?= ${NR_COLS}
   NR_DPUS             = 640
 else
-  NR_COLS             ?= ${NR_COLS}   # Change this
+  # NR_COLS             ?= ${NR_COLS}   # Change this
   NR_DPUS             ?= 640
 endif
 
@@ -71,14 +71,14 @@ CFLAGS              += $(COMMON_CFLAGS) \
                        -DNR_DPUS=$(NR_DPUS) \
                        -DNR_TASKLETS=$(NR_TASKLETS) \
                        -DCOUNTER_CONFIG=$(COUNTER_CONFIG) \
-                       -DNR_TABLES=$(NR_TABLES) \
-                       -DNR_COLS=$(NR_COLS) \
-                       -DMAX_NR_BATCHES=$(MAX_NR_BATCHES) \
-                       -DMAX_INDICES_PER_BATCH=$(MAX_INDICES_PER_BATCH) \
                        -DHOST=1 \
                        -DDPU_BINARY=\"dpu/$(EXE_DPU)\" \
                        -DMAX_ENC_BUFFER_MB="$(MAX_ENC_BUFFER_MB)" \
-                       -D_POSIX_C_SOURCE=199309L # For clock_gettime
+                       -D_POSIX_C_SOURCE=199309L #\ # ^For clock_gettime
+                       #-DNR_TABLES=$(NR_TABLES) \ 
+                       #-DMAX_NR_BATCHES=$(MAX_NR_BATCHES) \
+                       #-DMAX_INDICES_PER_BATCH=$(MAX_INDICES_PER_BATCH) \
+                       #-DNR_COLS=$(NR_COLS)  
 
 # define SHOW_DPU_LOGS in the source if we want DPU logs
 ifeq ($(SHOW_DPU_LOGS), 1)
@@ -139,9 +139,9 @@ export NR_TASKLETS
 export COUNTER_CONFIG
 export EXE_DPU
 # export NR_TABLES
-export NR_COLS
-export MAX_NR_BATCHES
-export MAX_INDICES_PER_BATCH
+# export NR_COLS
+# export MAX_NR_BATCHES
+# export MAX_INDICES_PER_BATCH
 
 dpu:
 	$(SHOW_MAKE) $@
