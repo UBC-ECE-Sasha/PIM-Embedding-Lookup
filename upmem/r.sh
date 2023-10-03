@@ -5,7 +5,7 @@
 export SDK_PATH=/home/jwong/upmem-2023.2.0-Linux-x86_64/include/dpu
 export DPU_IMPL_PATH=/home/jwong/PIM-Embedding-Lookup/upmem
 export PY7M_PATH=/home/jwong/miniconda3/pkgs/python-3.7.10-hffdb5ce_100_cpython/lib/
-# export NR_COLS=8
+export NR_COLS=8
 export MAX_NR_BATCHES=8
 export NR_TASKLETS=14
 export MAX_INDICES_PER_BATCH=10
@@ -89,3 +89,4 @@ export TABLE_CONFIG=1250-1250-1250-1250-1250-1250-1250-1250-1250-1250-1250-1250-
 # make clean
 # make
 ./run.sh -br random #> CPUBatch_100.out
+# ./run-build.sh -br random

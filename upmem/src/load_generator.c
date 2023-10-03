@@ -172,10 +172,10 @@ uint32_t* nr_cols, uint32_t **indices, uint32_t **offsets, uint32_t *ind_len) {
 }
 
 int main() {
-	// uint32_t rows[5] = {2048, 1024, 4096, 8192, 2048};
-	// uint32_t cols[5] = {64, 64, 64, 32, 32};
-	uint32_t rows[5] = {2048, 2048, 2048, 2048, 2048};
-	uint32_t cols[5] = {64, 64, 64, 64, 64};
+	uint32_t rows[5] = {2048, 1024, 4096, 8192, 2048};
+	uint32_t cols[5] = {64, 64, 64, 32, 32};
+	// uint32_t rows[5] = {2048, 2048, 2048, 2048, 2048};
+	// uint32_t cols[5] = {64, 64, 64, 64, 64};
 	uint32_t ind_len[5] = {32, 32, 32, 32, 32};
 	uint32_t off_len[5] = {32, 32, 32, 32, 32};
 	uint32_t max_cols = 64;

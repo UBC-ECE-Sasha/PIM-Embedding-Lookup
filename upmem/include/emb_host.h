@@ -265,7 +265,7 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 		return true;
 	}
 
-	struct dpu_set_t* populate_mram_sg(uint32_t nr_tables, uint32_t* nr_rows, uint32_t* nr_cols, int32_t **emb_tables, dpu_runtime_totals *runtime){
+	struct dpu_set_t* populate_mram_sg(uint32_t nr_tables, uint32_t* nr_rows, uint32_t* nr_cols, int32_t **emb_tables, dpu_runtime_totals *runtime) {
 
 		struct timespec start, end;
 		struct dpu_set_t dpu;
@@ -312,7 +312,7 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 		DPU_ASSERT(dpu_sync(*dpu_set));
 		DPU_ASSERT(dpu_push_sg_xfer(*dpu_set, DPU_XFER_TO_DPU, "emb_data", 0,
 					ALIGN(max_rows*sizeof(int32_t), 8),
-					&get_block_info, DPU_SG_XFER_DISABLE_LENGTH_CHECK | DPU_SG_XFER_DEFAULT));
+					&get_block_info, (dpu_sg_xfer_flags_t) (DPU_SG_XFER_DISABLE_LENGTH_CHECK | DPU_SG_XFER_DEFAULT)));
 		DPU_ASSERT(dpu_sync(*dpu_set));
 		return dpu_set;
 
@@ -726,7 +726,7 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 
 		DPU_ASSERT(dpu_push_sg_xfer(*dpu_set_ptr, DPU_XFER_TO_DPU, "input_buffer", 0,
 					ALIGN(largest_len, 8),
-					&get_block_info, DPU_SG_XFER_DISABLE_LENGTH_CHECK | DPU_SG_XFER_DEFAULT));
+					&get_block_info, (dpu_sg_xfer_flags_t) (DPU_SG_XFER_DISABLE_LENGTH_CHECK | DPU_SG_XFER_DEFAULT)));
 		DPU_ASSERT(dpu_sync(*dpu_set_ptr));
 		// printf("launching dpus\n");
 		DPU_ASSERT(dpu_launch(*dpu_set_ptr, DPU_SYNCHRONOUS));
@@ -779,7 +779,7 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 		// printf("DEBUG: right before xfer to final results, largestbatch = %u\n", largest_batch);
 		DPU_ASSERT(dpu_push_sg_xfer(*dpu_set_ptr, DPU_XFER_FROM_DPU, "input_buffer", results_offset,
 					ALIGN(largest_batch * sizeof(int32_t), 8),
-					&get_block_info_results, DPU_SG_XFER_DISABLE_LENGTH_CHECK | DPU_SG_XFER_DEFAULT));
+					&get_block_info_results, (dpu_sg_xfer_flags_t) (DPU_SG_XFER_DISABLE_LENGTH_CHECK | DPU_SG_XFER_DEFAULT)));
 					
 		DPU_ASSERT(dpu_sync(*dpu_set_ptr));
 
