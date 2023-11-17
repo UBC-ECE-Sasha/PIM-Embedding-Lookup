@@ -88,5 +88,5 @@ export TABLE_CONFIG=1250-1250-1250-1250-1250-1250-1250-1250-1250-1250-1250-1250-
 # export MAX_NR_BATCHES=100
 # make clean
 # make
-./run.sh -br random #> CPUBatch_100.out
-# ./run-build.sh -br random
+# ./run.sh -br random #> CPUBatch_100.out
+./run.sh -br random

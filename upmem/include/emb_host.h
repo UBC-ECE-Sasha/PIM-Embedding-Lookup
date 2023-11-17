@@ -33,9 +33,8 @@
 #define MAX_NR_BATCHES -1			// self-note: clear (del later)
 #define NR_TABLES -1				// self-note: clear (del later)
 
-// TODO: Change to dynamically allocated items in functions
+// // TODO: Change to dynamically allocated items in functions
 uint32_t INDICES_LEN = MAX_INDICES_PER_BATCH*MAX_NR_BATCHES;
-uint32_t* num_cols_global;
 
 // int32_t* buffer_data[NR_COLS];	// Old - FIX TODO
 
@@ -270,7 +269,14 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 		struct timespec start, end;
 		struct dpu_set_t dpu;
 
-		num_cols_global = (uint32_t*) malloc(nr_tables * sizeof(uint32_t));
+		// DEBUG
+		int32_t **tmp = (int32_t**) emb_tables;
+		// printf("EXPORT VAL CHK: emb_tables[0][0][0] = %d, emb_tables[0][%d][%d] = %d\n", 
+		// 		tmp[0][0], 
+		// 		nr_cols[0]-1, nr_rows[0]-1, tmp[0][nr_cols[0]*nr_rows[0]-1]);
+		// printf("EXPORT VAL CHK: emb_tables[%d][0][0] = %d, emb_tables[%d][%d][%d] = %d\n", 
+		// 		nr_tables-1, tmp[nr_tables-1][0], 
+		// 		nr_tables-1, nr_cols[nr_tables-1], nr_rows[nr_tables-1]-1, tmp[nr_tables-1][nr_cols[nr_tables-1]*nr_rows[nr_tables-1]-1]);
 
 		// Calculate total number of cols for total number of DPUs alloc'd
 		uint32_t total_cols = 0;
@@ -279,10 +285,9 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 			if (nr_rows[i] > max_rows) {
 				max_rows = nr_rows[i];
 			}
-
 			total_cols += nr_cols[i];
-			num_cols_global[i] = nr_cols[i];
 		}
+		// printf("nr_cols, [0] = %d, [last] = %d, ptr = %lu\n", nr_cols[0], nr_cols[nr_tables-1], (uint64_t) nr_cols);
 
 		dpu_set = (struct dpu_set_t*) malloc(sizeof(struct dpu_set_t));
 
@@ -648,7 +653,9 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 		// printf("Setting addr for dpu %d, len %d, addr [%d][%d]\n", dpu_index, out->length, table_id, col_index);
 	}
 
-	int32_t* lookup_sg(uint32_t** indices, uint32_t** offsets, uint32_t* ind_len, uint32_t* off_len, uint32_t nr_tables, float** final_results, void *dpu_set_ptr_untyped, int64_t latency_print
+	int32_t* lookup_sg(uint32_t** indices, uint32_t** offsets, 
+						uint32_t* ind_len, uint32_t* off_len, uint32_t nr_tables, 
+						float** final_results, void *dpu_set_ptr_untyped, int64_t latency_print, uint32_t* nr_cols
 			//,dpu_runtime_group *runtime_group
 		       ){
 		// // Check env
@@ -660,13 +667,20 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 
 		long ind_copy_lat, query_copy_lat, dpu_launch_lat, results_copy_lat, callback_prep_lat, wait_sync_lat;
 
-		// printf("LOOK indices[0][0] = %u, indices[0][1023] = %u\n", indices[0][0], indices[0][1023]);
-		// printf("LOOK offsets[0][0] = %u, offsets[0][31] = %u\n", offsets[0][0], offsets[0][31]);
+		// printf("C++ LOOK indices[0][0] = %u, indices[0][%d] = %u\n", indices[0][0], ind_len[0] - 1, indices[0][ind_len[0] - 1]);
+		// printf("C++ LOOK offsets[0][0] = %u, offsets[0][%d] = %u\n", offsets[0][0], off_len[0] - 1, offsets[0][off_len[0] - 1]);
+
+		// printf("C++ LOOK indices[%d][0] = %u, indices[%d][%d] = %u\n", nr_tables-1, indices[nr_tables-1][0], nr_tables-1, ind_len[nr_tables-1]-1, indices[nr_tables-1][ind_len[nr_tables-1]-1]);
+		// printf("C++ LOOK offsets[%d][0] = %u, offsets[%d][%d] = %u\n", nr_tables-1, offsets[nr_tables-1][0], nr_tables-1, off_len[nr_tables-1]-1, offsets[nr_tables-1][off_len[nr_tables-1]-1]);
+
+		// printf("C++ IND LEN[0] = %d, OFF LEN[0] = %d\n", ind_len[0], off_len[0]);
+		// printf("C++ IND LEN[LAST] = %d, OFF LEN[LAST] = %d\n", ind_len[nr_tables-1], off_len[nr_tables-1]);
+		// printf("C++ COLS(batch)[0] = %d, COLS(batch)[LAST] = %d\n", nr_cols[0], nr_cols[nr_tables-1]);
 
 		// PIM: Profiling
 		struct timespec start, end;
 
-		//printf("starting lookup\n");
+		// printf("starting lookup\n");
 		struct dpu_set_t *dpu_set_ptr = (struct dpu_set_t *) dpu_set_ptr_untyped;
 		// struct timespec start, end;
 		int dpu_id, table_id;
@@ -682,7 +696,7 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 			lengths[i].indices_len = ind_len[i];
 			lengths[i].nr_batches = off_len[i];
 			lengths[i].offsets_start =  sizeof(struct query_len) / sizeof(uint32_t) + ind_len[i];
-			total_cols += num_cols_global[i];
+			total_cols += nr_cols[i];
 
 			// Get max copy size
 			uint32_t total_len = lengths[i].indices_len + lengths[i].nr_batches;
@@ -716,7 +730,7 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 			.indices = indices,
 			.offsets = offsets,
 			.lengths = lengths,
-			.nr_cols = num_cols_global,
+			.nr_cols = nr_cols,
 			.nr_tables = nr_tables,
 		};
 
@@ -756,11 +770,11 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 
 			if (dpu_id >= working) {
 				table_id += 1;
-				working += num_cols_global[table_id];
-				tmp_results[table_id] = (int32_t**) malloc(num_cols_global[table_id] * sizeof(int32_t*));
+				working += nr_cols[table_id];
+				tmp_results[table_id] = (int32_t**) malloc(nr_cols[table_id] * sizeof(int32_t*));
 			}
 
-			col_index = num_cols_global[table_id] - (working - dpu_id);
+			col_index = nr_cols[table_id] - (working - dpu_id);
 			tmp_results[table_id][col_index] = (int32_t*) malloc(off_len[table_id] * sizeof(int32_t));
 		}
 
@@ -768,7 +782,7 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 
 		sg_xfer_results_context sc_results_args = {
 			.lengths = lengths,
-			.nr_cols = num_cols_global,
+			.nr_cols = nr_cols,
 			.nr_tables = nr_tables,
 			.tmp_results = tmp_results,
 		};
@@ -802,12 +816,12 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 		callback_data->off_len = off_len;	// Update to dynamic
 		callback_data->tmp_results = tmp_results;
 		callback_data->nr_tables = nr_tables;
-		callback_data->nr_cols = num_cols_global;
+		callback_data->nr_cols = nr_cols;
 		callback_data->total_cols = total_cols;
 
 		// printf("DEBUG: Starting callback\n");
 		DPU_ASSERT(dpu_callback(*dpu_set_ptr, post_process, (void*) callback_data, DPU_CALLBACK_DEFAULT));
-		//printf("callback done4\n");
+		// printf("callback done4\n");
 
 		if (latency_record == 1) {
 			TIME_NOW(&end);
@@ -861,7 +875,7 @@ struct dpu_set_t* populate_mram(uint32_t table_id, uint64_t nr_rows, uint32_t co
 		free(lengths);
 		free(callback_data);
 		for (uint16_t i = 0; i < nr_tables; i++) {
-			for (uint32_t j = 0; j < num_cols_global[i]; j++) {
+			for (uint32_t j = 0; j < nr_cols[i]; j++) {
 				free(tmp_results[i][j]);
 			}
 			free(tmp_results[i]);

@@ -149,7 +149,7 @@ uint32_t* nr_cols, uint32_t **indices, uint32_t **offsets, uint32_t *ind_len) {
 	// for (int i = 0; i < 100; i++) {
 	// 	printf("#%d calls of lookup_sg\n", i);
 	// 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
-	lookup_sg(indices, offsets, ind_len, off_len, nr_tables, final_results, (void*) dpu_set, 0);
+	lookup_sg(indices, offsets, ind_len, off_len, nr_tables, final_results, (void*) dpu_set, 0, nr_cols);
 	// 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end);
 	// 	sum += time_diff(start, end).tv_nsec;
 	// }

@@ -71,14 +71,14 @@ int main() {
 
         // mram_read seems to only handle copying 32 variables at a time
         uint32_t num_iters = (indices_len + nr_batches) / 32;
-        for (uint32_t i = 0; i < num_iters; i++) {
+        for (uint32_t i = 0; i <= num_iters; i++) {
             mram_read((__mram_ptr void const*) ((uint64_t) input_buffer + sizeof(struct query_len) + 32 * sizeof(uint32_t) * i), 
                         &buffer[lengths_offset + 32 * i], 
                         32 * sizeof(uint32_t));
         }
-        mram_read((__mram_ptr void const*) (uint64_t) input_buffer + sizeof(struct query_len) + 32 * sizeof(uint32_t) * num_iters,
-                    &buffer[lengths_offset + num_iters * 32],
-                    ((indices_len + nr_batches) % 32) * sizeof(uint32_t));
+        // mram_read((__mram_ptr void const*) (uint64_t) input_buffer + sizeof(struct query_len) + 32 * sizeof(uint32_t) * num_iters,
+        //             &buffer[lengths_offset + num_iters * 32],
+        //             ((indices_len + nr_batches) % 32) * sizeof(uint32_t));
         // mram_read((__mram_ptr void const *) ((uint64_t) input_buffer + sizeof(struct query_len)), &(buffer[lengths_offset]), ALIGN((indices_len + nr_batches) * sizeof(uint32_t), 8));
 
         indices = (uint32_t*) ((uint64_t) buffer + sizeof(struct query_len));
